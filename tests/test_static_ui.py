@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from app.database import connect, init_db
+from app.main import create_app
+
+
+class StaticUiTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = str(Path(self.tmp.name) / "test.sqlite3")
+        init_db(self.db_path)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _counts(self) -> dict[str, int]:
+        with connect(self.db_path) as conn:
+            return {
+                "documents": conn.execute("SELECT COUNT(*) AS count FROM json_documents").fetchone()["count"],
+                "events": conn.execute("SELECT COUNT(*) AS count FROM document_events").fetchone()["count"],
+            }
+
+    def test_static_editor_shell_routes_are_public_and_do_not_mutate(self) -> None:
+        client = TestClient(create_app(self.db_path))
+        before = self._counts()
+
+        index = client.get("/")
+        app = client.get("/app")
+        css = client.get("/static/styles.css")
+        js = client.get("/static/app.js")
+        favicon = client.get("/favicon.ico")
+
+        self.assertEqual(index.status_code, 200)
+        self.assertIn("text/html", index.headers["content-type"])
+        self.assertIn("OpenJson", index.text)
+        self.assertIn("JSON editor", index.text)
+        self.assertIn("copyLinkButton", index.text)
+        self.assertIn("editorFileInput", index.text)
+        self.assertIn("conflictKeepLocalButton", index.text)
+        self.assertIn("schemaPanel", index.text)
+        self.assertIn("schemaSelect", index.text)
+        self.assertIn("schemaMatchPanel", index.text)
+        self.assertIn("zipFileInput", index.text)
+        self.assertIn("zipImportOutput", index.text)
+        self.assertIn("teamMembersOutput", index.text)
+        self.assertIn("createUserButton", index.text)
+        self.assertIn("addMemberButton", index.text)
+        self.assertIn("signupButton", index.text)
+        self.assertIn("loginButton", index.text)
+        self.assertIn("logoutButton", index.text)
+        self.assertIn("createInviteButton", index.text)
+        self.assertIn("acceptInviteButton", index.text)
+        self.assertIn("autosaveToggle", index.text)
+        self.assertIn("autoMergeToggle", index.text)
+        self.assertIn("liveTextToggle", index.text)
+        self.assertIn("commitLiveButton", index.text)
+        self.assertIn("collaborationPanel", index.text)
+        self.assertEqual(app.status_code, 200)
+        self.assertIn("text/html", app.headers["content-type"])
+        self.assertEqual(css.status_code, 200)
+        self.assertIn("text/css", css.headers["content-type"])
+        self.assertIn("workspace-grid", css.text)
+        self.assertIn(".hidden", css.text)
+        self.assertIn("schema-row", css.text)
+        self.assertEqual(js.status_code, 200)
+        self.assertIn("javascript", js.headers["content-type"])
+        self.assertIn("/editor-bootstrap", js.text)
+        self.assertIn("/schemas", js.text)
+        self.assertIn("/schema-matches", js.text)
+        self.assertIn("/imports/zip-preview", js.text)
+        self.assertIn("/imports/zip-apply", js.text)
+        self.assertIn("/projects/${encodeURIComponent(state.projectId)}/members", js.text)
+        self.assertIn("/users", js.text)
+        self.assertIn("/auth/signup", js.text)
+        self.assertIn("/auth/login", js.text)
+        self.assertIn("/auth/logout", js.text)
+        self.assertIn("/auth/refresh", js.text)
+        self.assertIn("/offline-sync", js.text)
+        self.assertIn("/invitations/accept", js.text)
+        self.assertIn("/projects/${encodeURIComponent(state.projectId)}/invitations", js.text)
+        self.assertIn("/ws/documents/", js.text)
+        self.assertIn("merge_strategy", js.text)
+        self.assertIn("/collaboration-state", js.text)
+        self.assertIn("/presence", js.text)
+        self.assertIn("/content-conflict-preview", js.text)
+        self.assertIn("/rollback", js.text)
+        self.assertIn("URLSearchParams", js.text)
+        self.assertIn("navigator.clipboard", js.text)
+        self.assertIn("importEditorFile", js.text)
+        self.assertIn("keepLocalBufferOnLatest", js.text)
+        self.assertIn("previewCreateSchemaMatch", js.text)
+        self.assertIn("renderSchema", js.text)
+        self.assertIn("SCHEMA_VALIDATION_FAILED", js.text)
+        self.assertIn("renderSchemaValidationFailure", js.text)
+        self.assertIn("renderZipImportResult", js.text)
+        self.assertIn("apiFetchBinary", js.text)
+        self.assertIn("renderCollaboration", js.text)
+        self.assertIn("renderTeamPanel", js.text)
+        self.assertIn("openCollaborationSocket", js.text)
+        self.assertIn("sendRealtimeMessage", js.text)
+        self.assertIn("sendPresenceHeartbeat", js.text)
+        self.assertIn("text_session.join", js.text)
+        self.assertIn("text_session.commit", js.text)
+        self.assertIn("flushOfflineQueue", js.text)
+        self.assertIn("Autosaved from OpenJson UI", js.text)
+        self.assertIn("handleCreationError", js.text)
+        self.assertIn("formatDiagnosticValue", js.text)
+        self.assertEqual(favicon.status_code, 200)
+        self.assertIn("image/svg", favicon.headers["content-type"])
+        self.assertEqual(self._counts(), before)
+
+    def test_static_editor_shell_route_is_registered(self) -> None:
+        routes = {(route.path, ",".join(sorted(route.methods))) for route in create_app(self.db_path).routes if hasattr(route, "methods")}
+
+        self.assertIn(("/", "GET"), routes)
+        self.assertIn(("/app", "GET"), routes)
+        self.assertIn(("/favicon.ico", "GET"), routes)
+
+
+if __name__ == "__main__":
+    unittest.main()

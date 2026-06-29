@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenJson Workspace</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <svg aria-hidden="true" class="svg-sprite">
+      <symbol id="icon-refresh" viewBox="0 0 24 24">
+        <path d="M21 12a9 9 0 0 1-15.4 6.4" />
+        <path d="M3 12A9 9 0 0 1 18.4 5.6" />
+        <path d="M18 2v5h-5" />
+        <path d="M6 22v-5h5" />
+      </symbol>
+      <symbol id="icon-save" viewBox="0 0 24 24">
+        <path d="M5 3h12l2 2v16H5z" />
+        <path d="M8 3v6h8V3" />
+        <path d="M8 21v-7h8v7" />
+      </symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6" />
+      </symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m16 16 5 5" />
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </symbol>
+      <symbol id="icon-clock" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </symbol>
+      <symbol id="icon-diff" viewBox="0 0 24 24">
+        <path d="M7 7h10" />
+        <path d="M7 12h6" />
+        <path d="M7 17h10" />
+        <path d="M18 10v4" />
+        <path d="M16 12h4" />
+      </symbol>
+      <symbol id="icon-rollback" viewBox="0 0 24 24">
+        <path d="M4 7v6h6" />
+        <path d="M5 13a7 7 0 1 0 2-7" />
+      </symbol>
+      <symbol id="icon-link" viewBox="0 0 24 24">
+        <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+        <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+      </symbol>
+      <symbol id="icon-upload" viewBox="0 0 24 24">
+        <path d="M12 16V4" />
+        <path d="m7 9 5-5 5 5" />
+        <path d="M5 20h14" />
+      </symbol>
+    </svg>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark">OJ</div>
+          <div>
+            <h1>OpenJson</h1>
+            <p id="projectLabel">Workspace editor</p>
+          </div>
+        </div>
+        <form id="connectionForm" class="connection-bar">
+          <label>
+            Actor
+            <input id="actorIdInput" name="actorId" autocomplete="off" />
+          </label>
+          <label>
+            Project
+            <input id="projectIdInput" name="projectId" autocomplete="off" />
+          </label>
+          <label>
+            Token
+            <input id="tokenInput" name="token" autocomplete="off" type="password" />
+          </label>
+          <button class="icon-button strong" type="submit" title="Load workspace" aria-label="Load workspace">
+            <svg><use href="#icon-refresh"></use></svg>
+          </button>
+          <button id="copyLinkButton" class="icon-button" type="button" title="Copy share link" aria-label="Copy share link">
+            <svg><use href="#icon-link"></use></svg>
+          </button>
+        </form>
+      </header>
+
+      <main class="workspace-grid">
+        <aside class="sidebar">
+          <section class="panel account-panel">
+            <div class="panel-heading">
+              <h2>Account</h2>
+            </div>
+            <label class="stacked-label">
+              Name
+              <input id="authNameInput" autocomplete="name" placeholder="Min Kim" />
+            </label>
+            <label class="stacked-label">
+              Email
+              <input id="authEmailInput" autocomplete="email" placeholder="min@example.com" />
+            </label>
+            <label class="stacked-label">
+              Password
+              <input id="authPasswordInput" autocomplete="current-password" type="password" />
+            </label>
+            <div class="button-row compact-row">
+              <button id="signupButton" class="secondary-button" type="button">Sign Up</button>
+              <button id="loginButton" class="primary-button" type="button">Login</button>
+              <button id="logoutButton" class="secondary-button" type="button">Logout</button>
+            </div>
+            <div id="authOutput" class="dense-output compact-output">Use a session token or dev actor.</div>
+          </section>
+
+          <section class="panel panel-flush">
+            <div class="panel-heading">
+              <h2>Documents</h2>
+              <button id="newDocumentButton" class="icon-button" type="button" title="New document" aria-label="New document">
+                <svg><use href="#icon-plus"></use></svg>
+              </button>
+            </div>
+            <div class="filter-row">
+              <label>
+                <span>Path</span>
+                <input id="pathPrefixInput" autocomplete="off" placeholder="config" />
+              </label>
+              <label>
+                <span>Find</span>
+                <input id="queryInput" autocomplete="off" placeholder="model" />
+              </label>
+              <button id="filterButton" class="icon-button" type="button" title="Filter" aria-label="Filter">
+                <svg><use href="#icon-search"></use></svg>
+              </button>
+            </div>
+            <div id="documentTree" class="document-tree" aria-live="polite"></div>
+          </section>
+
+          <section class="panel zip-import-panel">
+            <div class="panel-heading">
+              <h2>ZIP Import</h2>
+              <button id="zipSelectButton" class="icon-button" type="button" title="Select ZIP archive" aria-label="Select ZIP archive">
+                <svg><use href="#icon-upload"></use></svg>
+              </button>
+            </div>
+            <div class="button-row">
+              <button id="zipPreviewButton" class="secondary-button" type="button">Preview</button>
+              <button id="zipApplyButton" class="primary-button" type="button">Apply</button>
+            </div>
+            <input id="zipFileInput" class="hidden" type="file" accept=".zip,application/zip,application/x-zip-compressed" />
+            <div id="zipImportOutput" class="dense-output compact-output">No ZIP selected.</div>
+          </section>
+
+          <section class="panel team-panel">
+            <div class="panel-heading">
+              <h2>Team</h2>
+              <button id="refreshTeamButton" class="icon-button" type="button" title="Refresh members" aria-label="Refresh members">
+                <svg><use href="#icon-refresh"></use></svg>
+              </button>
+            </div>
+            <div id="teamMembersOutput" class="dense-output compact-output">Load a project to view members.</div>
+            <label class="stacked-label">
+              Display name
+              <input id="newUserNameInput" autocomplete="off" placeholder="Min Kim" />
+            </label>
+            <label class="stacked-label">
+              Email
+              <input id="newUserEmailInput" autocomplete="off" placeholder="min@example.com" />
+            </label>
+            <button id="createUserButton" class="secondary-button full-width" type="button">Create User</button>
+            <label class="stacked-label">
+              User ID
+              <input id="memberUserIdInput" autocomplete="off" placeholder="user_..." />
+            </label>
+            <label class="stacked-label">
+              Role
+              <select id="memberRoleSelect">
+                <option value="editor">editor</option>
+                <option value="viewer">viewer</option>
+                <option value="reviewer">reviewer</option>
+                <option value="admin">admin</option>
+                <option value="owner">owner</option>
+              </select>
+            </label>
+            <button id="addMemberButton" class="primary-button full-width" type="button">Add Member</button>
+            <label class="stacked-label">
+              Invite email
+              <input id="inviteEmailInput" autocomplete="email" placeholder="editor@example.com" />
+            </label>
+            <label class="stacked-label">
+              Invite role
+              <select id="inviteRoleSelect">
+                <option value="editor">editor</option>
+                <option value="viewer">viewer</option>
+                <option value="reviewer">reviewer</option>
+                <option value="admin">admin</option>
+              </select>
+            </label>
+            <button id="createInviteButton" class="secondary-button full-width" type="button">Create Invite</button>
+            <label class="stacked-label">
+              Invite token
+              <input id="inviteTokenInput" autocomplete="off" placeholder="oji_..." />
+            </label>
+            <button id="acceptInviteButton" class="secondary-button full-width" type="button">Accept Invite</button>
+            <div id="teamActionOutput" class="dense-output compact-output">Create a user, then add them to this project.</div>
+          </section>
+
+          <section id="createPanel" class="panel create-panel hidden">
+            <div class="panel-heading">
+              <h2>New JSON</h2>
+            </div>
+            <label class="stacked-label">
+              Full path
+              <input id="newPathInput" autocomplete="off" placeholder="config/model.json" />
+            </label>
+            <label class="stacked-label">
+              Schema
+              <select id="schemaSelect">
+                <option value="">Automatic pattern match</option>
+              </select>
+            </label>
+            <div id="schemaMatchPanel" class="dense-output compact-output">Enter a path to preview schema binding.</div>
+            <label class="stacked-label">
+              Content
+              <textarea id="newContentInput" spellcheck="false">{&#10;  "name": "baseline"&#10;}</textarea>
+            </label>
+            <div class="button-row">
+              <button id="importCreateButton" class="secondary-button" type="button">
+                <svg><use href="#icon-upload"></use></svg>
+                <span>Import</span>
+              </button>
+              <button id="createDocumentButton" class="primary-button" type="button">Create</button>
+              <button id="cancelCreateButton" class="secondary-button" type="button">Cancel</button>
+            </div>
+            <input id="createFileInput" class="hidden" type="file" accept="application/json,.json" />
+          </section>
+        </aside>
+
+        <section class="editor-column">
+          <div class="editor-header">
+            <div>
+              <div id="documentPath" class="document-path">No document selected</div>
+              <div id="documentMeta" class="document-meta">Version -</div>
+            </div>
+            <div id="statusChips" class="chip-row"></div>
+          </div>
+
+          <div class="toolbar">
+            <button id="reloadButton" class="icon-button" type="button" title="Reload document" aria-label="Reload document">
+              <svg><use href="#icon-refresh"></use></svg>
+            </button>
+            <button id="validateButton" class="icon-button" type="button" title="Validate" aria-label="Validate">
+              <svg><use href="#icon-check"></use></svg>
+            </button>
+            <button id="importEditorButton" class="icon-button" type="button" title="Import JSON file" aria-label="Import JSON file">
+              <svg><use href="#icon-upload"></use></svg>
+            </button>
+            <label class="autosave-toggle">
+              <input id="autosaveToggle" type="checkbox" />
+              <span>Autosave</span>
+            </label>
+            <label class="autosave-toggle">
+              <input id="autoMergeToggle" type="checkbox" />
+              <span>Auto-merge</span>
+            </label>
+            <label class="autosave-toggle">
+              <input id="liveTextToggle" type="checkbox" />
+              <span>Live Text</span>
+            </label>
+            <button id="commitLiveButton" class="secondary-button" type="button">Commit Live</button>
+            <button id="previewButton" class="secondary-button" type="button">Preview</button>
+            <button id="saveButton" class="primary-button" type="button">
+              <svg><use href="#icon-save"></use></svg>
+              <span>Save</span>
+            </button>
+          </div>
+
+          <textarea id="editorBuffer" class="json-editor" spellcheck="false" aria-label="JSON editor"></textarea>
+          <input id="editorFileInput" class="hidden" type="file" accept="application/json,.json" />
+          <div id="editorStatus" class="editor-status">Load a project to start.</div>
+        </section>
+
+        <aside class="inspector">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Schema</h2>
+            </div>
+            <div id="schemaPanel" class="dense-output"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Validation</h2>
+            </div>
+            <div id="validationPanel" class="dense-output"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Collaboration</h2>
+            </div>
+            <div id="collaborationPanel" class="dense-output"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Conflict</h2>
+            </div>
+            <div id="conflictPanel" class="dense-output"></div>
+            <div id="conflictActions" class="button-row hidden">
+              <button id="conflictReloadButton" class="secondary-button" type="button">Reload</button>
+              <button id="conflictKeepLocalButton" class="primary-button" type="button">Keep Local</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>History</h2>
+              <button id="historyButton" class="icon-button" type="button" title="Refresh history" aria-label="Refresh history">
+                <svg><use href="#icon-clock"></use></svg>
+              </button>
+            </div>
+            <div id="historyPanel" class="dense-output"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Diff</h2>
+              <button id="diffButton" class="icon-button" type="button" title="Load diff" aria-label="Load diff">
+                <svg><use href="#icon-diff"></use></svg>
+              </button>
+            </div>
+            <div class="version-row">
+              <label>
+                From
+                <input id="diffFromInput" type="number" min="1" value="1" />
+              </label>
+              <label>
+                To
+                <input id="diffToInput" type="number" min="1" value="1" />
+              </label>
+            </div>
+            <div id="diffPanel" class="dense-output"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Rollback</h2>
+              <button id="rollbackButton" class="icon-button danger" type="button" title="Rollback" aria-label="Rollback">
+                <svg><use href="#icon-rollback"></use></svg>
+              </button>
+            </div>
+            <label class="stacked-label">
+              Target version
+              <input id="rollbackTargetInput" type="number" min="1" value="1" />
+            </label>
+            <div id="rollbackPanel" class="dense-output"></div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

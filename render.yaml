@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: openjson
+    runtime: docker
+    plan: starter
+    region: singapore
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    disk:
+      name: openjson-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: OPENJSON_DB_PATH
+        value: /data/openjson.sqlite3
+      - key: OPENJSON_PUBLIC_BASE_URL
+        value: https://openjson.thelumen.work
+      - key: OPENJSON_CORS_ORIGINS
+        value: https://openjson.thelumen.work
+      - key: OPENJSON_EMAIL_BACKEND
+        value: console
+      - key: OPENJSON_REQUEST_LOGGING
+        value: "1"
