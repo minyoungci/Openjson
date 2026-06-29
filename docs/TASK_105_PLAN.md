@@ -15,6 +15,7 @@ features.
 - One attached persistent disk mounted at `/data`.
 - SQLite database stored at `/data/openjson.sqlite3`.
 - Single service instance.
+- Automatic deploys disabled to reduce accidental build usage.
 - Public URL: `https://openjson.thelumen.work`.
 
 ## Included
@@ -23,6 +24,11 @@ features.
 - Docker start command compatible with Render's `PORT` environment variable.
 - Git ignore rules for local databases, caches, generated output, and secrets.
 - Render deployment usage document.
+- Repository-side cost controls for initial deployment:
+  - `plan: starter`
+  - `numInstances: 1`
+  - `disk.sizeGB: 1`
+  - `autoDeploy: false`
 
 ## Explicitly Excluded
 
@@ -31,6 +37,7 @@ features.
 - Managed Redis/Key Value provisioning.
 - SMTP provider setup.
 - OIDC provider setup.
+- Render Dashboard billing or payment method configuration.
 - SAML/SCIM.
 - Billing, metering, or enterprise administration.
 

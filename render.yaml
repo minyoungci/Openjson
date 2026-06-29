@@ -5,7 +5,8 @@ services:
     plan: starter
     region: singapore
     branch: main
-    autoDeploy: true
+    autoDeploy: false
+    numInstances: 1
     healthCheckPath: /health
     dockerfilePath: ./Dockerfile
     dockerContext: .

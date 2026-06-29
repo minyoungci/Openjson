@@ -12,6 +12,9 @@ This document describes the initial managed deployment path for OpenJson.
 - Disk mount: `/data`
 - Database path: `/data/openjson.sqlite3`
 - Public URL: `https://openjson.thelumen.work`
+- Auto deploy: disabled
+- Instance count: 1
+- Disk size: 1 GB
 
 This is the fastest practical deployment path for the current codebase. It is
 single-instance by design. Move to PostgreSQL before scaling to multiple app
@@ -28,6 +31,37 @@ Render will create:
 
 The service uses the `starter` plan because persistent disks require a paid web
 service.
+
+## Cost Controls
+
+The repository-side deployment limits are:
+
+```text
+plan=starter
+numInstances=1
+disk.sizeGB=1
+autoDeploy=false
+```
+
+This keeps compute and persistent disk capacity fixed for the initial
+deployment. `autoDeploy=false` prevents every GitHub push from starting a new
+build automatically. Deploy manually from the Render Dashboard when a change is
+ready.
+
+Render Dashboard settings to apply manually:
+
+1. Open Workspace Settings.
+2. Go to Build Pipeline.
+3. Keep the Starter pipeline tier.
+4. Click Set spend limit.
+5. Set the pipeline spend limit to `0` if allowed. If Render requires a positive
+   value, use the lowest allowed value.
+
+Render currently documents a monthly spend limit for pipeline minutes. Outbound
+bandwidth is usage-based after the included monthly allowance, so monitor it
+from the Billing page and Render Metrics. Put Cloudflare in front of the custom
+domain before public launch so basic abuse controls and rate limits can be
+applied outside Render.
 
 ## Environment Variables
 
@@ -77,8 +111,9 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/minyoungci/Op
 4. Review the Blueprint resources.
 5. Apply the Blueprint.
 6. Wait until the service is live.
-7. Add `openjson.thelumen.work` as a custom domain in Render.
-8. In Cloudflare DNS, create:
+7. Apply the Cost Controls above in Workspace Settings.
+8. Add `openjson.thelumen.work` as a custom domain in Render.
+9. In Cloudflare DNS, create:
 
 ```text
 Type: CNAME
