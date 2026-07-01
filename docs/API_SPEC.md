@@ -265,6 +265,9 @@ offline queue flushes.
 See `docs/TASK_176_PLAN.md` for guarding stale browser presence heartbeats and
 outbound collaboration WebSocket sends after document switches or socket
 replacement.
+See `docs/TASK_177_PLAN.md` for preventing stale browser save failures from
+enqueueing old content into the offline sync queue after document or editor
+context changes.
 
 ## Deployment Version
 

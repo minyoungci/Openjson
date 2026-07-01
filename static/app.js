@@ -2156,14 +2156,12 @@
       await loadBootstrap(documentId);
     } catch (error) {
       const currentRequest = isCurrentSaveRequest(requestId, documentId, baseVersion, contentText);
-      if (!(error instanceof ApiError)) {
-        queueOfflineSave(savePayload);
-        if (currentRequest) {
-          setEditorStatus(`Queued offline save. Pending: ${state.offlineQueue.length}.`, "info");
-        }
+      if (!currentRequest) {
         return;
       }
-      if (!currentRequest) {
+      if (!(error instanceof ApiError)) {
+        queueOfflineSave(savePayload);
+        setEditorStatus(`Queued offline save. Pending: ${state.offlineQueue.length}.`, "info");
         return;
       }
       throw error;

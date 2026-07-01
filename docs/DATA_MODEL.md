@@ -614,6 +614,13 @@ request context and explicitly clean up stale captured-document presence if a
 delayed heartbeat completes after document or session transitions. This does
 not alter `editor_presence` schema, WebSocket server state, permissions,
 canonical snapshots, or append-only `document_events`.
+TASK_177 stale save failure offline-queue guarding also adds no table. The
+static browser client reuses the existing save request context and writes a
+captured save payload to the browser offline queue only if the failed save is
+still the active document, base version, and editor buffer. This prevents old
+content from being replayed later by offline sync after document switches or
+local edits. It does not alter backend offline-sync storage, idempotency,
+permissions, canonical snapshots, or append-only `document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and
