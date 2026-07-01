@@ -173,6 +173,40 @@ class RealtimeCollaborationTests(unittest.TestCase):
             with self.assertRaises(WebSocketDisconnect):
                 websocket.receive_json()
 
+    def test_viewer_text_session_operation_is_rejected_without_mutating_session(self) -> None:
+        with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:
+            websocket.receive_json()
+            websocket.send_json({"type": "text_session.join"})
+            state = websocket.receive_json()
+            self.assertEqual(state["type"], "text_session.state")
+            index = state["content_text"].index("baseline")
+
+            websocket.send_json(
+                {
+                    "type": "text_session.op",
+                    "client_id": "viewer-client",
+                    "base_text_revision": state["text_revision"],
+                    "op": {"type": "replace", "index": index, "length": len("baseline"), "text": "viewer"},
+                }
+            )
+            rejected = websocket.receive_json()
+            self.assertEqual(rejected["type"], "error")
+            self.assertEqual(rejected["error"]["code"], "PERMISSION_DENIED")
+            self.assertEqual(
+                rejected["error"]["details"]["required_permission"],
+                "document:write",
+            )
+            with self.assertRaises(WebSocketDisconnect):
+                websocket.receive_json()
+
+        with self.client.websocket_connect(self._ws_path(self.owner_id)) as websocket:
+            websocket.receive_json()
+            websocket.send_json({"type": "text_session.join"})
+            state = websocket.receive_json()
+
+        self.assertIn("baseline", state["content_text"])
+        self.assertNotIn("viewer", state["content_text"])
+
     def test_missing_actor_websocket_gets_structured_error(self) -> None:
         with self.client.websocket_connect(self._ws_path()) as websocket:
             message = websocket.receive_json()

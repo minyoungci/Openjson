@@ -4,9 +4,10 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.database import utc_now
+from app.database import connect, utc_now
 from app.document_service import get_document_editor_state, update_document_content
 from app.errors import AppError, ErrorCode
+from app.permissions import ProjectPermission, require_project_permission
 
 
 MAX_TEXT_OPERATION_LENGTH = 20_000
@@ -66,6 +67,7 @@ class TextCollaborationManager:
         actor_id: str,
         message: dict[str, Any],
     ) -> dict[str, Any]:
+        _require_text_session_write_permission(db_path, document_id=document_id, actor_id=actor_id)
         await self.join(db_path, document_id=document_id, actor_id=actor_id)
         client_id = message.get("client_id")
         base_revision = _ensure_revision(message.get("base_text_revision"))
@@ -116,6 +118,7 @@ class TextCollaborationManager:
         actor_id: str,
         message: dict[str, Any],
     ) -> dict[str, Any]:
+        _require_text_session_write_permission(db_path, document_id=document_id, actor_id=actor_id)
         await self.join(db_path, document_id=document_id, actor_id=actor_id)
         expected_revision = message.get("text_revision")
         reason = message.get("reason") if isinstance(message.get("reason"), str) else "Committed collaborative text session"
@@ -183,6 +186,30 @@ class TextCollaborationManager:
             "content_text": session.text,
             "updated_at": session.updated_at,
         }
+
+
+def _require_text_session_write_permission(db_path: str, *, document_id: str, actor_id: str) -> None:
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT project_id
+            FROM json_documents
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (document_id,),
+        ).fetchone()
+        if row is None:
+            raise AppError(
+                ErrorCode.DOCUMENT_NOT_FOUND,
+                "Document not found.",
+                {"document_id": document_id},
+            )
+        require_project_permission(
+            conn,
+            actor_id=actor_id,
+            project_id=row["project_id"],
+            permission=ProjectPermission.DOCUMENT_WRITE,
+        )
 
 
 def _ensure_revision(value: Any) -> int:

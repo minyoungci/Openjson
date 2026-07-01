@@ -371,6 +371,12 @@ changes only HTTP error serialization for catch-all unknown exceptions. Known
 `AppError` diagnostics remain structured; unknown exception responses expose a
 request id and diagnostic code by default instead of raw exception messages.
 
+TASK_131 WebSocket collaborative text-session permission hardening also adds no
+table. `text_session.join` remains a read-permission operation, while
+`text_session.op` and `text_session.commit` require document write permission
+before mutating transient text-session state or writing a durable
+`document_events` update.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

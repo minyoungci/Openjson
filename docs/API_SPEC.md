@@ -161,6 +161,8 @@ hardening.
 See `docs/TASK_129_PLAN.md` for the read-only SQLite backup status check.
 See `docs/TASK_130_PLAN.md` for production-safe unexpected internal error
 responses.
+See `docs/TASK_131_PLAN.md` for WebSocket collaborative text-session write
+permission hardening.
 
 ## Deployment Version
 
@@ -474,11 +476,14 @@ WebSocket clients. When `OPENJSON_ALLOW_ACTOR_HEADER=0`, tokenless WebSocket
 structured `error` messages. Text session operations are transient OT-style
 insert/delete/replace operations; they become durable only when
 `text_session.commit` parses the current collaborative text as valid JSON and
-writes a normal append-only document update event. `OPENJSON_REDIS_URL` enables
-optional Redis fanout across app processes. It does not make raw text canonical
-storage and does not persist syntax-invalid JSON. `OPENJSON_WS_RATE_LIMIT_*`
-can enable a per-connection fixed-window WebSocket message limit. Limited
-connections receive a structured `RATE_LIMITED` error payload and then close.
+writes a normal append-only document update event. `text_session.join` requires
+document read permission; `text_session.op` and `text_session.commit` require
+document write permission so viewers cannot mutate shared transient editor
+state. `OPENJSON_REDIS_URL` enables optional Redis fanout across app processes.
+It does not make raw text canonical storage and does not persist syntax-invalid
+JSON. `OPENJSON_WS_RATE_LIMIT_*` can enable a per-connection fixed-window
+WebSocket message limit. Limited connections receive a structured
+`RATE_LIMITED` error payload and then close.
 
 Offline sync accepts a batch of queued client content-save operations:
 
