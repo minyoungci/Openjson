@@ -186,6 +186,9 @@ python scripts\backup_sqlite.py --generate-encryption-key
 
 Render cron jobs cannot access the web service persistent disk, so this
 scheduler runs inside the single web service instance that owns `/data`.
+When encrypted scheduled backups are enabled, `/ready` fails with HTTP 503 if
+the encryption key secret is missing. This prevents a deployment from looking
+ready while the daily backup job is guaranteed to fail.
 
 ## Deploy Steps
 
@@ -238,6 +241,9 @@ GET https://openjson.thelumen.work/app
 `/ready` should report `database.migrations.status=ok`. If it returns 503 with
 pending or drifted migrations, run the current migration/init flow against the
 persistent database before treating the deploy as live.
+It should also report `operations.backup_scheduler.status=ok`. If it returns
+503 with `operations.backup_scheduler.status=misconfigured`, set
+`OPENJSON_BACKUP_ENCRYPTION_KEY` in Render and redeploy or restart the service.
 
 `/version` should show the deployed Git commit from Render's
 `RENDER_GIT_COMMIT` default environment variable and
@@ -275,6 +281,9 @@ contains `GET /version`; run a manual Render deploy from the latest `main`
 commit and verify the Cloudflare CNAME still points at the Render service.
 If diagnostics include `READINESS_MIGRATION_STATUS_MISSING`, `/ready` is also
 coming from an older build that predates the migration readiness gate.
+If diagnostics include `READY_BACKUP_SCHEDULER_MISCONFIGURED`, the deployment
+is serving the current readiness surface but the scheduled encrypted backup key
+secret is missing.
 
 Then create an account from the UI and run a small document flow:
 

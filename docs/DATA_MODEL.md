@@ -354,6 +354,12 @@ the existing integrity-checked backup flow and writes backup files plus
 manifests to the configured filesystem output directory. Scheduler state is
 runtime configuration, not database state.
 
+TASK_128 encrypted scheduled-backup readiness hardening also adds no table. It
+derives readiness from runtime backup scheduler configuration and reports only
+non-secret status fields. Missing encryption secrets for enabled encrypted
+scheduled backups fail `GET /ready` without mutating database rows or backup
+files.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -127,12 +127,24 @@ def run_deployment_status_report(
 
     ready = _probe_body_json(checks["ready"])
     if checks["ready"]["status"] != "ok":
-        _add_failure(
-            diagnostics,
-            code="READINESS_ENDPOINT_FAILED",
-            message="The deployment did not return HTTP 200 from /ready.",
-            details=checks["ready"],
-        )
+        backup_scheduler_status = _ready_error_backup_scheduler_status(ready)
+        if backup_scheduler_status == "misconfigured":
+            _add_failure(
+                diagnostics,
+                code="READY_BACKUP_SCHEDULER_MISCONFIGURED",
+                message=(
+                    "The deployment readiness check reports a misconfigured backup scheduler. "
+                    "Set OPENJSON_BACKUP_ENCRYPTION_KEY in Render and redeploy or restart the service."
+                ),
+                details=checks["ready"],
+            )
+        else:
+            _add_failure(
+                diagnostics,
+                code="READINESS_ENDPOINT_FAILED",
+                message="The deployment did not return HTTP 200 from /ready.",
+                details=checks["ready"],
+            )
     elif not isinstance(ready, dict) or ready.get("status") != "ready":
         _add_failure(
             diagnostics,
@@ -258,6 +270,25 @@ def run_deployment_status_report(
         "checks": checks,
         "diagnostics": diagnostics,
     }
+
+
+def _ready_error_backup_scheduler_status(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return None
+    details = error.get("details")
+    if not isinstance(details, dict):
+        return None
+    operations = details.get("operations")
+    if not isinstance(operations, dict):
+        return None
+    backup_scheduler = operations.get("backup_scheduler")
+    if not isinstance(backup_scheduler, dict):
+        return None
+    status = backup_scheduler.get("status")
+    return status if isinstance(status, str) else None
 
 
 def run_deployment_status_smoke(

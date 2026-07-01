@@ -156,6 +156,8 @@ See `docs/TASK_125_PLAN.md` for SQLite backup restore drill checks.
 See `docs/TASK_126_PLAN.md` for release preflight operation-script coverage.
 See `docs/TASK_127_PLAN.md` for the single-instance SQLite daily backup
 scheduler.
+See `docs/TASK_128_PLAN.md` for encrypted scheduled-backup readiness
+hardening.
 
 ## Deployment Version
 
@@ -202,6 +204,10 @@ required table set, `PRAGMA foreign_keys = ON`, and schema migration ledger.
 When the migration ledger has pending known migrations or unknown drift rows,
 the endpoint returns HTTP 503 with the standard `INTERNAL_ERROR` envelope and
 `error.details.database.migrations`.
+It also reports non-secret operational readiness for the SQLite backup
+scheduler. When encrypted scheduled backups are enabled but
+`OPENJSON_BACKUP_ENCRYPTION_KEY` is missing, the endpoint returns HTTP 503 with
+`error.details.operations.backup_scheduler.status = "misconfigured"`.
 
 ## Bootstrap, Workspace, Project
 

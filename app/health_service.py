@@ -104,7 +104,11 @@ def version_status(
     }
 
 
-def readiness_status(db_path: str) -> dict[str, Any]:
+def readiness_status(
+    db_path: str,
+    *,
+    backup_scheduler_config: BackupSchedulerConfig | None = None,
+) -> dict[str, Any]:
     try:
         with connect(db_path) as conn:
             foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
@@ -142,30 +146,64 @@ def readiness_status(db_path: str) -> dict[str, Any]:
         )
 
     migrations = get_schema_migration_status(db_path)
+    database_details = {
+        "connected": True,
+        "foreign_keys_enabled": True,
+        "missing_tables": [],
+        "migrations": migrations,
+    }
     if migrations["status"] != "ok":
         raise AppError(
             ErrorCode.INTERNAL_ERROR,
             "Readiness check failed.",
+            {"database": database_details},
+            status_code=503,
+        )
+
+    backup_scheduler_details = _backup_scheduler_readiness(backup_scheduler_config)
+    if backup_scheduler_details["status"] != "ok":
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR,
+            "Readiness check failed.",
             {
-                "database": {
-                    "connected": True,
-                    "foreign_keys_enabled": True,
-                    "missing_tables": [],
-                    "migrations": migrations,
-                }
+                "database": database_details,
+                "operations": {
+                    "backup_scheduler": backup_scheduler_details,
+                },
             },
             status_code=503,
         )
 
     return {
         "status": "ready",
-        "database": {
-            "connected": True,
-            "foreign_keys_enabled": True,
-            "required_tables": sorted(REQUIRED_TABLES),
-            "migrations": migrations,
+        "database": database_details | {"required_tables": sorted(REQUIRED_TABLES)},
+        "operations": {
+            "backup_scheduler": backup_scheduler_details,
         },
     }
+
+
+def _backup_scheduler_readiness(config: BackupSchedulerConfig | None) -> dict[str, Any]:
+    if config is None:
+        return {
+            "status": "ok",
+            "configured": False,
+        }
+    details = {
+        "status": "ok",
+        "configured": True,
+        "enabled": config.enabled,
+        "encrypt": config.encrypt,
+        "encryption_key_configured": config.encryption_key_configured,
+        "interval_seconds": config.interval_seconds,
+        "retention_count": config.retention_count,
+    }
+    if config.enabled and config.encrypt and not config.encryption_key_configured:
+        return details | {
+            "status": "misconfigured",
+            "message": "OPENJSON_BACKUP_ENCRYPTION_KEY is required when encrypted scheduled backups are enabled.",
+        }
+    return details
 
 
 def _deployment_platform() -> str:

@@ -59,9 +59,12 @@ Deployment smoke endpoints:
 - `GET /version`
 - `GET /ready`
 
-`GET /ready` also checks the schema migration ledger. A response is ready only
-when `database.migrations.status` is `ok`; pending or drifted migrations return
-HTTP 503 with the standard error envelope.
+`GET /ready` also checks the schema migration ledger and non-secret backup
+scheduler readiness. A response is ready only when
+`database.migrations.status` is `ok`; pending or drifted migrations return HTTP
+503 with the standard error envelope. If encrypted scheduled backups are
+enabled without `OPENJSON_BACKUP_ENCRYPTION_KEY`, `/ready` returns HTTP 503 with
+`operations.backup_scheduler.status = "misconfigured"`.
 
 Optional local usage limits:
 
@@ -188,12 +191,15 @@ See `docs/TASK_122_PLAN.md` for the release preflight CLI and
 `docs/TASK_126_PLAN.md` for operation-script coverage. TASK_127 adds
 `--expect-backup-scheduler-enabled true` and
 `--expect-backup-encryption-key-configured true` for the Render daily backup
-scheduler check.
+scheduler check. TASK_128 also makes `/ready` fail when encrypted scheduled
+backups are enabled but the encryption key secret is missing.
 If the official URL returns `VERSION_ENDPOINT_NOT_FOUND`, the custom domain is
 not yet serving a build that includes `/version`; trigger a manual Render deploy
 from the latest `main` commit and rerun the smoke.
 If it returns `READINESS_MIGRATION_STATUS_MISSING`, the public `/ready` route is
 also from an older build and should be resolved by the same manual deploy.
+If it returns `READY_BACKUP_SCHEDULER_MISCONFIGURED`, set
+`OPENJSON_BACKUP_ENCRYPTION_KEY` in Render and redeploy or restart the service.
 
 Local non-realtime editor shell:
 
@@ -655,7 +661,10 @@ $env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
 When enabled, the FastAPI app starts an in-process background task that reuses
 `scripts\backup_sqlite.py` to create integrity-checked encrypted backups. This
 is intended for the current single-instance SQLite deployment, not for
-multi-instance scaling or PostgreSQL. See `docs/TASK_127_PLAN.md`.
+multi-instance scaling or PostgreSQL. If `OPENJSON_BACKUP_ENCRYPT = "1"` but
+`OPENJSON_BACKUP_ENCRYPTION_KEY` is missing, `GET /ready` returns HTTP 503
+instead of reporting the deployment ready. See `docs/TASK_127_PLAN.md` and
+`docs/TASK_128_PLAN.md`.
 
 Optional structured request logging:
 

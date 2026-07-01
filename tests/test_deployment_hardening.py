@@ -125,6 +125,9 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertTrue(ready.json()["database"]["connected"])
         self.assertTrue(ready.json()["database"]["foreign_keys_enabled"])
         self.assertEqual(ready.json()["database"]["migrations"]["status"], "ok")
+        self.assertEqual(ready.json()["operations"]["backup_scheduler"]["status"], "ok")
+        self.assertFalse(ready.json()["operations"]["backup_scheduler"]["enabled"])
+        self.assertFalse(ready.json()["operations"]["backup_scheduler"]["encryption_key_configured"])
         self.assertEqual(
             ready.json()["database"]["migrations"]["current_schema_version"],
             KNOWN_SCHEMA_MIGRATIONS[-1][0],
@@ -294,6 +297,32 @@ class DeploymentHardeningTests(unittest.TestCase):
         response = raised.exception.as_response()
         self.assertEqual(response["error"]["code"], ErrorCode.INTERNAL_ERROR)
         self.assertIn("missing_tables", response["error"]["details"]["database"])
+
+    def test_ready_failure_reports_encrypted_backup_scheduler_without_key(self) -> None:
+        before = self._counts()
+        with patch.dict(
+            os.environ,
+            {
+                "OPENJSON_BACKUP_SCHEDULER_ENABLED": "1",
+                "OPENJSON_BACKUP_ENCRYPT": "1",
+            },
+            clear=False,
+        ):
+            client = TestClient(create_app(self.db_path))
+            response = client.get("/ready")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["error"]["code"], ErrorCode.INTERNAL_ERROR)
+        self.assertEqual(response.json()["error"]["details"]["database"]["migrations"]["status"], "ok")
+        backup_status = response.json()["error"]["details"]["operations"]["backup_scheduler"]
+        self.assertEqual(backup_status["status"], "misconfigured")
+        self.assertTrue(backup_status["enabled"])
+        self.assertTrue(backup_status["encrypt"])
+        self.assertFalse(backup_status["encryption_key_configured"])
+        self.assertIn("OPENJSON_BACKUP_ENCRYPTION_KEY", backup_status["message"])
+        self.assertNotIn("db_path", backup_status)
+        self.assertNotIn("output_dir", backup_status)
+        self.assertEqual(self._counts(), before)
 
     def test_ready_failure_reports_pending_migrations(self) -> None:
         pending_db = str(Path(self.tmp.name) / "pending.sqlite3")
@@ -621,6 +650,66 @@ class DeploymentHardeningTests(unittest.TestCase):
             [diagnostic["code"] for diagnostic in result["diagnostics"]],
             ["BACKUP_ENCRYPTION_KEY_CONFIG_MISMATCH"],
         )
+
+    def test_deployment_status_report_detects_ready_backup_scheduler_misconfiguration(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/health":
+                return httpx.Response(200, json={"status": "ok", "service": "openjson-api"})
+            if request.url.path == "/ready":
+                return httpx.Response(
+                    503,
+                    json={
+                        "error": {
+                            "code": ErrorCode.INTERNAL_ERROR,
+                            "message": "Readiness check failed.",
+                            "details": {
+                                "database": {
+                                    "connected": True,
+                                    "foreign_keys_enabled": True,
+                                    "missing_tables": [],
+                                    "migrations": {
+                                        "status": "ok",
+                                    },
+                                },
+                                "operations": {
+                                    "backup_scheduler": {
+                                        "status": "misconfigured",
+                                        "enabled": True,
+                                        "encrypt": True,
+                                        "encryption_key_configured": False,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                )
+            if request.url.path == "/version":
+                return httpx.Response(
+                    200,
+                    json={
+                        "service": "openjson-api",
+                        "source": {
+                            "git_commit": "abc123",
+                        },
+                        "runtime_config": {
+                            "actor_header_allowed": False,
+                            "backup_scheduler_enabled": True,
+                            "backup_encryption_key_configured": False,
+                        },
+                    },
+                )
+            return httpx.Response(200, headers={"content-type": "text/html"}, text="<title>OpenJson</title>")
+
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport, base_url="https://openjson.example") as client:
+            result = run_deployment_status_report(client)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(
+            [diagnostic["code"] for diagnostic in result["diagnostics"]],
+            ["READY_BACKUP_SCHEDULER_MISCONFIGURED"],
+        )
+        self.assertIn("OPENJSON_BACKUP_ENCRYPTION_KEY", result["diagnostics"][0]["message"])
 
 
 if __name__ == "__main__":

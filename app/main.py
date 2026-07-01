@@ -286,7 +286,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
     @application.get("/ready")
     def ready_endpoint() -> dict:
-        return readiness_status(application.state.db_path)
+        return readiness_status(
+            application.state.db_path,
+            backup_scheduler_config=application.state.backup_scheduler_config,
+        )
 
     @application.get("/", include_in_schema=False)
     def ui_index_endpoint() -> FileResponse:
