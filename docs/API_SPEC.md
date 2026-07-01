@@ -152,6 +152,7 @@ See `docs/TASK_121_PLAN.md` for deployment smoke failure diagnostics.
 See `docs/TASK_122_PLAN.md` for the release preflight CLI.
 See `docs/TASK_123_PLAN.md` for encrypted SQLite MVP backup/restore.
 See `docs/TASK_124_PLAN.md` for derived compacted document snapshots.
+See `docs/TASK_125_PLAN.md` for SQLite backup restore drill checks.
 
 ## Deployment Version
 

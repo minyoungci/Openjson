@@ -133,10 +133,15 @@ TASK_010 adds the first local/staging operational smoke commands:
 - `scripts/check_replay_consistency.py`
 - `scripts/backup_sqlite.py`
 - `scripts/restore_sqlite.py`
+- `scripts/backup_restore_drill.py`
 
 Restore verifies adjacent backup manifest hashes when a manifest is present.
 Malformed manifests fail before target DB creation; missing manifests are
 reported and allowed for backward compatibility.
+
+The backup restore drill creates a backup, restores it into a temporary
+database, and requires the restored database combined integrity check to pass
+before the drill is considered successful.
 
 SQLite backup retention is optional through `--retention-count` or
 `OPENJSON_BACKUP_RETENTION_COUNT`. It prunes only older

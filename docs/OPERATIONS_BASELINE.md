@@ -184,6 +184,23 @@ SQLite file, verifies plaintext size/SHA-256, restores the target DB, then
 runs the same combined integrity checks. Missing or wrong encryption keys fail
 before target creation.
 
+## SQLite Backup Restore Drill
+
+Run a full backup and restore drill:
+
+```powershell
+$env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
+python scripts\backup_restore_drill.py `
+  --db-path "D:\OpenJson\openjson.sqlite3" `
+  --output-dir "D:\OpenJson\backups" `
+  --encrypt `
+  --retention-count 7 `
+  --report-path "D:\OpenJson\backups\latest-drill-report.json"
+```
+
+The drill exits successfully only when backup integrity and restored database
+integrity are both `ok`. It deletes the temporary restored database by default.
+
 ## Boundaries
 
 - Backup scheduling is not implemented.

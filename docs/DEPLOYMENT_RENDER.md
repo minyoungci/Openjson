@@ -123,6 +123,20 @@ python scripts\backup_sqlite.py --generate-encryption-key
 Do not commit the key. Encrypted backups use `.sqlite3.enc` and must be
 restored with the same key.
 
+For a restore drill after configuring the key:
+
+```bash
+python scripts/backup_restore_drill.py \
+  --db-path "$OPENJSON_DB_PATH" \
+  --output-dir /data/backups \
+  --encrypt \
+  --retention-count 7 \
+  --report-path /data/backups/latest-drill-report.json
+```
+
+The drill writes a JSON report and exits nonzero unless both backup integrity
+and restored database integrity pass.
+
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
 ```text
@@ -254,9 +268,9 @@ Then create an account from the UI and run a small document flow:
   should enforce distributed limits before scaling.
 - WebSocket message limiting is per-connection and in-process. It does not
   replace distributed connection limits or Cloudflare abuse controls.
-- Backup encryption is available in the SQLite backup script, but backup
-  scheduling and remote object storage lifecycle management are not provisioned
-  in this Render baseline.
+- Backup encryption and restore drills are available in the SQLite backup
+  scripts, but backup scheduling and remote object storage lifecycle management
+  are not provisioned in this Render baseline.
 - OIDC SSO is disabled until provider environment variables are configured.
 - Redis fanout is not provisioned in this baseline deployment.
 - PostgreSQL migration is required before serious production scale.

@@ -611,6 +611,23 @@ backward compatibility.
 For encrypted backups, set `OPENJSON_BACKUP_ENCRYPTION_KEY` before restore.
 Missing or wrong keys fail before target DB creation.
 
+SQLite backup restore drill:
+
+```powershell
+$env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
+python scripts\backup_restore_drill.py `
+  --db-path "D:\OpenJson\openjson.sqlite3" `
+  --output-dir "D:\OpenJson\backups" `
+  --encrypt `
+  --retention-count 7 `
+  --report-path "D:\OpenJson\backups\latest-drill-report.json"
+```
+
+The drill creates an integrity-checked backup, restores it into a temporary
+SQLite database, verifies combined integrity on the restored DB, and removes
+the temporary restored DB unless `--keep-restored` is provided. See
+`docs/TASK_125_PLAN.md`.
+
 Optional structured request logging:
 
 ```powershell
