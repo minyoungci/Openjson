@@ -166,6 +166,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("authoritativeText", js.text)
         self.assertIn("liveTextPendingOperation", js.text)
         self.assertIn("finishLocalLiveTextOperation", js.text)
+        self.assertIn("hasLocalLiveTextBuffer", js.text)
+        self.assertIn("scheduleLiveTextDiffIfNeeded", js.text)
         self.assertIn("Live text change is still syncing.", js.text)
         self.assertIn("Syncing latest live text before commit.", js.text)
         self.assertIn("flushOfflineQueue", js.text)

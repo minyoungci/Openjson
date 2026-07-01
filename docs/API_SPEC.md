@@ -169,6 +169,8 @@ See `docs/TASK_133_PLAN.md` for browser live-text pending-operation ack
 ordering.
 See `docs/TASK_134_PLAN.md` for authoritative accepted text-session payload
 resynchronization.
+See `docs/TASK_135_PLAN.md` for browser live-text local-buffer preservation
+when remote accepted operations arrive during local typing.
 
 ## Deployment Version
 
@@ -501,6 +503,12 @@ operations use the acknowledged `base_text_revision`.
 Every `text_session.op.accepted` payload includes the active session
 `content_text` so browser clients can realign their shadow text with the server
 session after transformed operations or idempotent replays.
+When a remote accepted operation arrives while the static browser client has
+unsent or unacknowledged local text, the browser preserves the visible local
+editor buffer, realigns its live-text shadow to the server session, and sends a
+fresh diff after pending local acknowledgement. This is transient client state
+only; committed JSON still becomes durable solely through the existing content
+save pipeline and append-only document events.
 
 Offline sync accepts a batch of queued client content-save operations:
 

@@ -1849,18 +1849,28 @@
       finishLocalLiveTextOperation();
       return;
     }
+    const hasLocalLiveTextBuffer =
+      state.liveTextPendingOperation || state.liveTextShadow !== els.editorBuffer.value;
     state.liveTextShadow = authoritativeText !== null ? authoritativeText : applyTextOperation(state.liveTextShadow, payload.op);
+    if (hasLocalLiveTextBuffer) {
+      scheduleLiveTextDiffIfNeeded();
+      return;
+    }
     state.liveTextApplyingRemote = true;
     els.editorBuffer.value = authoritativeText !== null ? authoritativeText : applyTextOperation(els.editorBuffer.value, payload.op);
     state.liveTextApplyingRemote = false;
     updateSyntaxState();
   }
 
-  function finishLocalLiveTextOperation() {
-    state.liveTextPendingOperation = false;
-    if (state.liveTextEnabled && state.liveTextShadow !== els.editorBuffer.value) {
+  function scheduleLiveTextDiffIfNeeded() {
+    if (state.liveTextEnabled && !state.liveTextPendingOperation && state.liveTextShadow !== els.editorBuffer.value) {
       window.setTimeout(() => handleLiveTextInput(), 0);
     }
+  }
+
+  function finishLocalLiveTextOperation() {
+    state.liveTextPendingOperation = false;
+    scheduleLiveTextDiffIfNeeded();
   }
 
   function handleLiveTextInput() {

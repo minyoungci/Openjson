@@ -395,6 +395,13 @@ browser clients can realign transient shadow text after transformed operations
 or idempotent replays. This payload is not canonical storage; only a successful
 `text_session.commit` creates durable `document_events` history.
 
+TASK_135 browser live-text local-buffer preservation also adds no table. The
+static browser UI treats unsent or unacknowledged editor text as client-owned
+transient state, preserves that visible buffer when remote accepted operations
+arrive, and re-diffs it against the authoritative session shadow after local
+acknowledgement. It does not change canonical snapshots, append-only
+`document_events`, rollback, replay, or content save contracts.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
