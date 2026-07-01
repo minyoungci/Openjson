@@ -164,7 +164,8 @@ For the official URL after a manual Render deploy:
 python scripts\smoke_deployment_status.py `
   --base-url https://openjson.thelumen.work `
   --expect-commit <git-sha> `
-  --expect-actor-header-allowed false
+  --expect-actor-header-allowed false `
+  --expect-backup-scheduler-enabled true
 ```
 
 Or run the combined release/deployment preflight:
@@ -172,7 +173,8 @@ Or run the combined release/deployment preflight:
 ```powershell
 python scripts\release_preflight.py `
   --base-url https://openjson.thelumen.work `
-  --expect-actor-header-allowed false
+  --expect-actor-header-allowed false `
+  --expect-backup-scheduler-enabled true
 ```
 
 This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
@@ -181,7 +183,9 @@ and does not create users, projects, documents, or events. See
 `docs/TASK_116_PLAN.md`. See `docs/TASK_117_PLAN.md` for WebSocket message
 rate limiting and `docs/TASK_121_PLAN.md` for structured failure diagnostics.
 See `docs/TASK_122_PLAN.md` for the release preflight CLI and
-`docs/TASK_126_PLAN.md` for operation-script coverage.
+`docs/TASK_126_PLAN.md` for operation-script coverage. TASK_127 adds
+`--expect-backup-scheduler-enabled true` for the Render daily backup scheduler
+check.
 If the official URL returns `VERSION_ENDPOINT_NOT_FOUND`, the custom domain is
 not yet serving a build that includes `/version`; trigger a manual Render deploy
 from the latest `main` commit and rerun the smoke.
@@ -633,6 +637,22 @@ The drill creates an integrity-checked backup, restores it into a temporary
 SQLite database, verifies combined integrity on the restored DB, and removes
 the temporary restored DB unless `--keep-restored` is provided. See
 `docs/TASK_125_PLAN.md`.
+
+Single-instance SQLite backup scheduler:
+
+```powershell
+$env:OPENJSON_BACKUP_SCHEDULER_ENABLED = "1"
+$env:OPENJSON_BACKUP_OUTPUT_DIR = "D:\OpenJson\backups"
+$env:OPENJSON_BACKUP_INTERVAL_SECONDS = "86400"
+$env:OPENJSON_BACKUP_RETENTION_COUNT = "7"
+$env:OPENJSON_BACKUP_ENCRYPT = "1"
+$env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
+```
+
+When enabled, the FastAPI app starts an in-process background task that reuses
+`scripts\backup_sqlite.py` to create integrity-checked encrypted backups. This
+is intended for the current single-instance SQLite deployment, not for
+multi-instance scaling or PostgreSQL. See `docs/TASK_127_PLAN.md`.
 
 Optional structured request logging:
 

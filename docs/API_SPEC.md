@@ -153,6 +153,9 @@ See `docs/TASK_122_PLAN.md` for the release preflight CLI.
 See `docs/TASK_123_PLAN.md` for encrypted SQLite MVP backup/restore.
 See `docs/TASK_124_PLAN.md` for derived compacted document snapshots.
 See `docs/TASK_125_PLAN.md` for SQLite backup restore drill checks.
+See `docs/TASK_126_PLAN.md` for release preflight operation-script coverage.
+See `docs/TASK_127_PLAN.md` for the single-instance SQLite daily backup
+scheduler.
 
 ## Deployment Version
 
@@ -181,6 +184,11 @@ It may include non-secret rate-limit flags:
 - `runtime_config.project_usage_limit_enabled`
 - `runtime_config.max_project_documents`
 - `runtime_config.max_project_snapshot_bytes`
+- `runtime_config.backup_scheduler_enabled`
+- `runtime_config.backup_scheduler_interval_seconds`
+- `runtime_config.backup_scheduler_retention_count`
+- `runtime_config.backup_scheduler_encrypt`
+- `runtime_config.backup_encryption_key_configured`
 
 When enabled, oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE`
 with HTTP 413 before endpoint handlers parse or mutate application data.

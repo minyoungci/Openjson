@@ -30,6 +30,7 @@ from app.auth_service import (
     revoke_project_api_token,
     signup_with_password,
 )
+from app.backup_scheduler import BackupScheduler, backup_scheduler_config_from_env
 from app.database import DEFAULT_DB_PATH, init_db
 from app.comment_service import (
     add_comment,
@@ -208,6 +209,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
         max_documents_raw=os.environ.get("OPENJSON_MAX_PROJECT_DOCUMENTS"),
         max_snapshot_bytes_raw=os.environ.get("OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES"),
     )
+    application.state.backup_scheduler_config = backup_scheduler_config_from_env(
+        db_path=application.state.db_path,
+    )
+    application.state.backup_scheduler = BackupScheduler(application.state.backup_scheduler_config)
     configure_request_body_limiting(application, config=request_body_limit_config)
     configure_rate_limiting(application, config=rate_limit_config)
     configure_request_observability(
@@ -234,9 +239,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @application.on_event("startup")
     async def realtime_startup() -> None:
         await collaboration_hub.start()
+        await application.state.backup_scheduler.start()
 
     @application.on_event("shutdown")
     async def realtime_shutdown() -> None:
+        await application.state.backup_scheduler.stop()
         await collaboration_hub.stop()
 
     @application.exception_handler(AppError)
@@ -274,6 +281,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             websocket_rate_limit_config=application.state.websocket_rate_limit_config,
             request_body_limit_config=application.state.request_body_limit_config,
             project_usage_limit_config=application.state.project_usage_limit_config,
+            backup_scheduler_config=application.state.backup_scheduler_config,
         )
 
     @application.get("/ready")

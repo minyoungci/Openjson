@@ -165,6 +165,28 @@ OPENJSON_OIDC_TOKEN_ENDPOINT=
 OPENJSON_OIDC_JWKS_URI=
 ```
 
+For the built-in single-instance SQLite daily backup scheduler, `render.yaml`
+enables:
+
+```text
+OPENJSON_BACKUP_SCHEDULER_ENABLED=1
+OPENJSON_BACKUP_OUTPUT_DIR=/data/backups
+OPENJSON_BACKUP_INTERVAL_SECONDS=86400
+OPENJSON_BACKUP_RETENTION_COUNT=7
+OPENJSON_BACKUP_ENCRYPT=1
+OPENJSON_BACKUP_ENCRYPTION_KEY=<secret>
+```
+
+Set `OPENJSON_BACKUP_ENCRYPTION_KEY` in Render before treating scheduled
+backups as healthy. Generate it locally with:
+
+```powershell
+python scripts\backup_sqlite.py --generate-encryption-key
+```
+
+Render cron jobs cannot access the web service persistent disk, so this
+scheduler runs inside the single web service instance that owns `/data`.
+
 ## Deploy Steps
 
 1. Push this repository to GitHub.
@@ -231,7 +253,8 @@ You can run the deployment status smoke from this repo:
 python scripts\smoke_deployment_status.py `
   --base-url https://openjson.thelumen.work `
   --expect-commit <git-sha> `
-  --expect-actor-header-allowed false
+  --expect-actor-header-allowed false `
+  --expect-backup-scheduler-enabled true
 ```
 
 The combined release/deployment preflight also checks local Git readiness,
@@ -240,7 +263,8 @@ Render Blueprint guard settings, and the official URL:
 ```powershell
 python scripts\release_preflight.py `
   --base-url https://openjson.thelumen.work `
-  --expect-actor-header-allowed false
+  --expect-actor-header-allowed false `
+  --expect-backup-scheduler-enabled true
 ```
 
 The smoke prints structured JSON even when it fails. If the diagnostics include
@@ -271,9 +295,8 @@ Then create an account from the UI and run a small document flow:
   should enforce distributed limits before scaling.
 - WebSocket message limiting is per-connection and in-process. It does not
   replace distributed connection limits or Cloudflare abuse controls.
-- Backup encryption and restore drills are available in the SQLite backup
-  scripts, but backup scheduling and remote object storage lifecycle management
-  are not provisioned in this Render baseline.
+- The SQLite backup scheduler is in-process and single-instance. Remote object
+  storage lifecycle management is not provisioned in this Render baseline.
 - OIDC SSO is disabled until provider environment variables are configured.
 - Redis fanout is not provisioned in this baseline deployment.
 - PostgreSQL migration is required before serious production scale.

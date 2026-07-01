@@ -12,6 +12,7 @@ from unittest.mock import patch
 import httpx
 from fastapi.testclient import TestClient
 
+from app.backup_scheduler import BackupSchedulerConfig
 from app.database import KNOWN_SCHEMA_MIGRATIONS, SCHEMA_SQL, connect, init_db, utc_now
 from app.errors import AppError, ErrorCode
 from app.health_service import readiness_status, version_status
@@ -25,6 +26,7 @@ from scripts.smoke_deployment_status import run_deployment_status_report, run_de
 class DeploymentHardeningTests(unittest.TestCase):
     def setUp(self) -> None:
         self._clear_rate_limit_env()
+        self._clear_backup_scheduler_env()
         os.environ.pop("OPENJSON_CORS_ORIGINS", None)
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = str(Path(self.tmp.name) / "test.sqlite3")
@@ -34,6 +36,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.tmp.cleanup()
         os.environ.pop("OPENJSON_CORS_ORIGINS", None)
         self._clear_rate_limit_env()
+        self._clear_backup_scheduler_env()
 
     def _clear_rate_limit_env(self) -> None:
         os.environ.pop("OPENJSON_RATE_LIMIT_ENABLED", None)
@@ -47,6 +50,14 @@ class DeploymentHardeningTests(unittest.TestCase):
         os.environ.pop("OPENJSON_PROJECT_USAGE_LIMIT_ENABLED", None)
         os.environ.pop("OPENJSON_MAX_PROJECT_DOCUMENTS", None)
         os.environ.pop("OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES", None)
+
+    def _clear_backup_scheduler_env(self) -> None:
+        os.environ.pop("OPENJSON_BACKUP_SCHEDULER_ENABLED", None)
+        os.environ.pop("OPENJSON_BACKUP_OUTPUT_DIR", None)
+        os.environ.pop("OPENJSON_BACKUP_INTERVAL_SECONDS", None)
+        os.environ.pop("OPENJSON_BACKUP_RETENTION_COUNT", None)
+        os.environ.pop("OPENJSON_BACKUP_ENCRYPT", None)
+        os.environ.pop("OPENJSON_BACKUP_ENCRYPTION_KEY", None)
 
     def _counts(self) -> dict[str, int]:
         from app.database import connect
@@ -103,6 +114,11 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertFalse(version.json()["runtime_config"]["project_usage_limit_enabled"])
         self.assertEqual(version.json()["runtime_config"]["max_project_documents"], 10000)
         self.assertEqual(version.json()["runtime_config"]["max_project_snapshot_bytes"], 100 * 1024 * 1024)
+        self.assertFalse(version.json()["runtime_config"]["backup_scheduler_enabled"])
+        self.assertEqual(version.json()["runtime_config"]["backup_scheduler_interval_seconds"], 24 * 60 * 60)
+        self.assertEqual(version.json()["runtime_config"]["backup_scheduler_retention_count"], 7)
+        self.assertFalse(version.json()["runtime_config"]["backup_scheduler_encrypt"])
+        self.assertFalse(version.json()["runtime_config"]["backup_encryption_key_configured"])
         self.assertNotIn("do-not-leak", json.dumps(version.json()))
         self.assertEqual(ready.status_code, 200)
         self.assertEqual(ready.json()["status"], "ready")
@@ -153,6 +169,15 @@ class DeploymentHardeningTests(unittest.TestCase):
                     max_documents=12,
                     max_snapshot_bytes=65_536,
                 ),
+                backup_scheduler_config=BackupSchedulerConfig(
+                    enabled=True,
+                    db_path="/secret/db/path.sqlite3",
+                    output_dir="/secret/backups",
+                    interval_seconds=86400,
+                    retention_count=7,
+                    encrypt=True,
+                    encryption_key_configured=True,
+                ),
             )
 
         self.assertEqual(payload["source"]["git_commit"], "explicit-sha")
@@ -170,9 +195,16 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertTrue(payload["runtime_config"]["project_usage_limit_enabled"])
         self.assertEqual(payload["runtime_config"]["max_project_documents"], 12)
         self.assertEqual(payload["runtime_config"]["max_project_snapshot_bytes"], 65_536)
+        self.assertTrue(payload["runtime_config"]["backup_scheduler_enabled"])
+        self.assertEqual(payload["runtime_config"]["backup_scheduler_interval_seconds"], 86400)
+        self.assertEqual(payload["runtime_config"]["backup_scheduler_retention_count"], 7)
+        self.assertTrue(payload["runtime_config"]["backup_scheduler_encrypt"])
+        self.assertTrue(payload["runtime_config"]["backup_encryption_key_configured"])
         self.assertTrue(payload["runtime_config"]["redis_fanout_enabled"])
         self.assertTrue(payload["runtime_config"]["oidc_configured"])
         self.assertNotIn("secret", json.dumps(payload))
+        self.assertNotIn("/secret/db/path.sqlite3", json.dumps(payload))
+        self.assertNotIn("/secret/backups", json.dumps(payload))
 
     def test_rate_limit_returns_standard_error_and_headers(self) -> None:
         with patch.dict(
@@ -366,6 +398,12 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn("OPENJSON_PROJECT_USAGE_LIMIT_ENABLED", render_yaml)
         self.assertIn("OPENJSON_MAX_PROJECT_DOCUMENTS", render_yaml)
         self.assertIn("OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES", render_yaml)
+        self.assertIn("OPENJSON_BACKUP_SCHEDULER_ENABLED", render_yaml)
+        self.assertIn("OPENJSON_BACKUP_OUTPUT_DIR", render_yaml)
+        self.assertIn("OPENJSON_BACKUP_INTERVAL_SECONDS", render_yaml)
+        self.assertIn("OPENJSON_BACKUP_RETENTION_COUNT", render_yaml)
+        self.assertIn("OPENJSON_BACKUP_ENCRYPT", render_yaml)
+        self.assertIn("OPENJSON_BACKUP_ENCRYPTION_KEY", render_yaml)
 
     def test_deployment_status_smoke_runner_uses_public_read_only_surfaces(self) -> None:
         before = self._counts()
@@ -385,6 +423,11 @@ class DeploymentHardeningTests(unittest.TestCase):
                 "OPENJSON_PROJECT_USAGE_LIMIT_ENABLED": "1",
                 "OPENJSON_MAX_PROJECT_DOCUMENTS": "10000",
                 "OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES": "104857600",
+                "OPENJSON_BACKUP_SCHEDULER_ENABLED": "1",
+                "OPENJSON_BACKUP_INTERVAL_SECONDS": "86400",
+                "OPENJSON_BACKUP_RETENTION_COUNT": "7",
+                "OPENJSON_BACKUP_ENCRYPT": "1",
+                "OPENJSON_BACKUP_ENCRYPTION_KEY": "test-key-configured",
             },
             clear=False,
         ):
@@ -393,6 +436,7 @@ class DeploymentHardeningTests(unittest.TestCase):
                 client,
                 expect_commit="smoke",
                 expect_actor_header_allowed=False,
+                expect_backup_scheduler_enabled=True,
             )
 
         self.assertEqual(result["status"], "ok")
@@ -402,6 +446,9 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertTrue(result["version"]["runtime_config"]["websocket_rate_limit_enabled"])
         self.assertTrue(result["version"]["runtime_config"]["request_body_limit_enabled"])
         self.assertTrue(result["version"]["runtime_config"]["project_usage_limit_enabled"])
+        self.assertTrue(result["version"]["runtime_config"]["backup_scheduler_enabled"])
+        self.assertTrue(result["version"]["runtime_config"]["backup_scheduler_encrypt"])
+        self.assertTrue(result["version"]["runtime_config"]["backup_encryption_key_configured"])
         self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
         self.assertTrue(result["app"]["contains_openjson"])
         self.assertEqual(self._counts(), before)
@@ -483,6 +530,48 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn(
             "older build",
             result["diagnostics"][0]["message"],
+        )
+
+    def test_deployment_status_report_detects_backup_scheduler_mismatch(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/health":
+                return httpx.Response(200, json={"status": "ok", "service": "openjson-api"})
+            if request.url.path == "/ready":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ready",
+                        "database": {
+                            "migrations": {
+                                "status": "ok",
+                            },
+                        },
+                    },
+                )
+            if request.url.path == "/version":
+                return httpx.Response(
+                    200,
+                    json={
+                        "service": "openjson-api",
+                        "source": {
+                            "git_commit": "abc123",
+                        },
+                        "runtime_config": {
+                            "actor_header_allowed": False,
+                            "backup_scheduler_enabled": False,
+                        },
+                    },
+                )
+            return httpx.Response(200, headers={"content-type": "text/html"}, text="<title>OpenJson</title>")
+
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport, base_url="https://openjson.example") as client:
+            result = run_deployment_status_report(client, expect_backup_scheduler_enabled=True)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(
+            [diagnostic["code"] for diagnostic in result["diagnostics"]],
+            ["BACKUP_SCHEDULER_CONFIG_MISMATCH"],
         )
 
 

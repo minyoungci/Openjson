@@ -98,6 +98,7 @@ def run_deployment_status_report(
     *,
     expect_commit: str | None = None,
     expect_actor_header_allowed: bool | None = None,
+    expect_backup_scheduler_enabled: bool | None = None,
 ) -> dict[str, Any]:
     checks = {
         "health": _probe_get(client, "/health"),
@@ -206,6 +207,18 @@ def run_deployment_status_report(
                     message="The deployed actor-header fallback setting does not match the expected value.",
                     details={"expected": expect_actor_header_allowed, "actual": actual_allowed},
                 )
+        if expect_backup_scheduler_enabled is not None:
+            actual_backup_scheduler_enabled = version["runtime_config"].get("backup_scheduler_enabled")
+            if actual_backup_scheduler_enabled is not expect_backup_scheduler_enabled:
+                _add_failure(
+                    diagnostics,
+                    code="BACKUP_SCHEDULER_CONFIG_MISMATCH",
+                    message="The deployed backup scheduler setting does not match the expected value.",
+                    details={
+                        "expected": expect_backup_scheduler_enabled,
+                        "actual": actual_backup_scheduler_enabled,
+                    },
+                )
 
     app_body = checks["app"].get("body")
     app_text = app_body.get("text", "") if isinstance(app_body, dict) else ""
@@ -237,6 +250,7 @@ def run_deployment_status_smoke(
     *,
     expect_commit: str | None = None,
     expect_actor_header_allowed: bool | None = None,
+    expect_backup_scheduler_enabled: bool | None = None,
 ) -> dict[str, Any]:
     health = _response_json(_get(client, "/health"))
     ready = _response_json(_get(client, "/ready"))
@@ -273,6 +287,16 @@ def run_deployment_status_smoke(
             f"Expected actor_header_allowed={expect_actor_header_allowed}, got {actual_allowed!r}",
         )
 
+    if expect_backup_scheduler_enabled is not None:
+        actual_backup_scheduler_enabled = version["runtime_config"].get("backup_scheduler_enabled")
+        _require(
+            actual_backup_scheduler_enabled is expect_backup_scheduler_enabled,
+            (
+                f"Expected backup_scheduler_enabled={expect_backup_scheduler_enabled}, "
+                f"got {actual_backup_scheduler_enabled!r}"
+            ),
+        )
+
     return {
         "status": "ok",
         "health": health,
@@ -294,17 +318,26 @@ def main() -> None:
         choices=("true", "false"),
         help="Expected /version runtime_config.actor_header_allowed value.",
     )
+    parser.add_argument(
+        "--expect-backup-scheduler-enabled",
+        choices=("true", "false"),
+        help="Expected /version runtime_config.backup_scheduler_enabled value.",
+    )
     args = parser.parse_args()
 
     expected_actor_header_allowed = None
     if args.expect_actor_header_allowed is not None:
         expected_actor_header_allowed = args.expect_actor_header_allowed == "true"
+    expected_backup_scheduler_enabled = None
+    if args.expect_backup_scheduler_enabled is not None:
+        expected_backup_scheduler_enabled = args.expect_backup_scheduler_enabled == "true"
 
     with httpx.Client(base_url=args.base_url.rstrip("/"), timeout=20.0, follow_redirects=True) as client:
         result = run_deployment_status_report(
             client,
             expect_commit=args.expect_commit,
             expect_actor_header_allowed=expected_actor_header_allowed,
+            expect_backup_scheduler_enabled=expected_backup_scheduler_enabled,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
     if result["status"] != "ok":

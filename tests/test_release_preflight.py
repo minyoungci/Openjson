@@ -60,6 +60,18 @@ services:
         value: "1"
       - key: OPENJSON_PROJECT_USAGE_LIMIT_ENABLED
         value: "1"
+      - key: OPENJSON_BACKUP_SCHEDULER_ENABLED
+        value: "1"
+      - key: OPENJSON_BACKUP_OUTPUT_DIR
+        value: /data/backups
+      - key: OPENJSON_BACKUP_INTERVAL_SECONDS
+        value: "86400"
+      - key: OPENJSON_BACKUP_RETENTION_COUNT
+        value: "7"
+      - key: OPENJSON_BACKUP_ENCRYPT
+        value: "1"
+      - key: OPENJSON_BACKUP_ENCRYPTION_KEY
+        sync: false
 """,
         encoding="utf-8",
     )
@@ -101,6 +113,7 @@ class ReleasePreflightTests(unittest.TestCase):
             "scripts/backup_restore_drill.py",
             report["checks"]["required_files"]["details"]["required_operation_files"],
         )
+        self.assertIn("expect-backup-scheduler-enabled true", report["summary"]["next_actions"][0])
         self.assertIn("release_preflight.py", report["summary"]["next_actions"][0])
 
     def test_preflight_fails_when_backup_restore_drill_is_missing(self) -> None:
@@ -157,6 +170,10 @@ services:
         missing_keys = {item["key"] for item in report["checks"]["render_blueprint"]["details"]["missing"]}
         self.assertIn("db_path", missing_keys)
         self.assertIn("actor_header_value", missing_keys)
+        self.assertIn("backup_scheduler", missing_keys)
+        self.assertIn("backup_scheduler_value", missing_keys)
+        self.assertIn("backup_encrypt_value", missing_keys)
+        self.assertIn("backup_encryption_key_secret", missing_keys)
 
     def test_preflight_reports_stale_official_deployment_action(self) -> None:
         captured: dict[str, Any] = {}
@@ -165,12 +182,14 @@ services:
             base_url: str,
             expect_commit: str | None,
             expect_actor_header_allowed: bool | None,
+            expect_backup_scheduler_enabled: bool | None,
         ) -> dict[str, Any]:
             captured.update(
                 {
                     "base_url": base_url,
                     "expect_commit": expect_commit,
                     "expect_actor_header_allowed": expect_actor_header_allowed,
+                    "expect_backup_scheduler_enabled": expect_backup_scheduler_enabled,
                 }
             )
             return {
@@ -192,6 +211,7 @@ services:
                 root,
                 base_url="https://openjson.thelumen.work",
                 expect_actor_header_allowed=False,
+                expect_backup_scheduler_enabled=True,
                 git_runner=_git_runner(),
                 deployment_runner=deployment_runner,
             )
@@ -199,6 +219,7 @@ services:
         self.assertEqual(report["status"], "failed")
         self.assertEqual(captured["expect_commit"], "abc123")
         self.assertFalse(captured["expect_actor_header_allowed"])
+        self.assertTrue(captured["expect_backup_scheduler_enabled"])
         self.assertEqual(report["checks"]["deployment_status"]["status"], "failed")
         self.assertEqual(report["checks"]["deployment_status"]["message"], "Deployment status smoke failed.")
         self.assertTrue(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from app.backup_scheduler import BackupSchedulerConfig
 from app.database import connect, get_schema_migration_status
 from app.errors import AppError, ErrorCode
 from app.project_usage_service import ProjectUsageLimitConfig
@@ -53,6 +54,7 @@ def version_status(
     websocket_rate_limit_config: RateLimitConfig,
     request_body_limit_config: RequestBodyLimitConfig,
     project_usage_limit_config: ProjectUsageLimitConfig,
+    backup_scheduler_config: BackupSchedulerConfig,
 ) -> dict[str, Any]:
     return {
         "service": "openjson-api",
@@ -82,6 +84,11 @@ def version_status(
             "project_usage_limit_enabled": project_usage_limit_config.enabled,
             "max_project_documents": project_usage_limit_config.max_documents,
             "max_project_snapshot_bytes": project_usage_limit_config.max_snapshot_bytes,
+            "backup_scheduler_enabled": backup_scheduler_config.enabled,
+            "backup_scheduler_interval_seconds": backup_scheduler_config.interval_seconds,
+            "backup_scheduler_retention_count": backup_scheduler_config.retention_count,
+            "backup_scheduler_encrypt": backup_scheduler_config.encrypt,
+            "backup_encryption_key_configured": backup_scheduler_config.encryption_key_configured,
             "redis_fanout_enabled": bool(_optional_env("OPENJSON_REDIS_URL")),
             "oidc_configured": all(
                 _optional_env(name)

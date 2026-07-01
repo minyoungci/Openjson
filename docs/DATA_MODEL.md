@@ -348,6 +348,12 @@ manifests. Restore decrypts to temporary local files before running the same
 combined database integrity checks. Encryption keys remain external operational
 secrets and are never stored in SQLite or backup manifests.
 
+TASK_127 SQLite backup scheduling also adds no table. It is an in-process
+background task for the single-instance Render SQLite deployment. It reuses
+the existing integrity-checked backup flow and writes backup files plus
+manifests to the configured filesystem output directory. Scheduler state is
+runtime configuration, not database state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

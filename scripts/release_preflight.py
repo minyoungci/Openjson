@@ -17,7 +17,7 @@ from scripts.smoke_deployment_status import run_deployment_status_report
 
 
 CommandRunner = Callable[[list[str], Path], dict[str, Any]]
-DeploymentRunner = Callable[[str, str | None, bool | None], dict[str, Any]]
+DeploymentRunner = Callable[[str, str | None, bool | None, bool | None], dict[str, Any]]
 
 
 REQUIRED_DEPLOYMENT_FILES = (
@@ -55,6 +55,12 @@ REQUIRED_RENDER_SNIPPETS = {
     "websocket_rate_limit": "OPENJSON_WS_RATE_LIMIT_ENABLED",
     "request_body_limit": "OPENJSON_REQUEST_BODY_LIMIT_ENABLED",
     "project_usage_limit": "OPENJSON_PROJECT_USAGE_LIMIT_ENABLED",
+    "backup_scheduler": "OPENJSON_BACKUP_SCHEDULER_ENABLED",
+    "backup_output_dir": "OPENJSON_BACKUP_OUTPUT_DIR",
+    "backup_interval": "OPENJSON_BACKUP_INTERVAL_SECONDS",
+    "backup_retention": "OPENJSON_BACKUP_RETENTION_COUNT",
+    "backup_encrypt": "OPENJSON_BACKUP_ENCRYPT",
+    "backup_encryption_key": "OPENJSON_BACKUP_ENCRYPTION_KEY",
 }
 
 
@@ -173,6 +179,15 @@ def _build_render_blueprint_check(repo_root: Path) -> dict[str, Any]:
     actor_header_is_disabled = "OPENJSON_ALLOW_ACTOR_HEADER" in text and 'value: "0"' in text
     if not actor_header_is_disabled:
         missing.append({"key": "actor_header_value", "snippet": 'OPENJSON_ALLOW_ACTOR_HEADER value: "0"'})
+    backup_scheduler_is_enabled = "OPENJSON_BACKUP_SCHEDULER_ENABLED" in text and 'value: "1"' in text
+    if not backup_scheduler_is_enabled:
+        missing.append({"key": "backup_scheduler_value", "snippet": 'OPENJSON_BACKUP_SCHEDULER_ENABLED value: "1"'})
+    backup_encryption_is_enabled = "OPENJSON_BACKUP_ENCRYPT" in text and 'value: "1"' in text
+    if not backup_encryption_is_enabled:
+        missing.append({"key": "backup_encrypt_value", "snippet": 'OPENJSON_BACKUP_ENCRYPT value: "1"'})
+    backup_key_is_secret = "OPENJSON_BACKUP_ENCRYPTION_KEY" in text and "sync: false" in text
+    if not backup_key_is_secret:
+        missing.append({"key": "backup_encryption_key_secret", "snippet": "OPENJSON_BACKUP_ENCRYPTION_KEY sync: false"})
 
     return _check(
         not missing,
@@ -184,12 +199,18 @@ def _build_render_blueprint_check(repo_root: Path) -> dict[str, Any]:
     )
 
 
-def _run_deployment(base_url: str, expect_commit: str | None, expect_actor_header_allowed: bool | None) -> dict[str, Any]:
+def _run_deployment(
+    base_url: str,
+    expect_commit: str | None,
+    expect_actor_header_allowed: bool | None,
+    expect_backup_scheduler_enabled: bool | None,
+) -> dict[str, Any]:
     with httpx.Client(base_url=base_url.rstrip("/"), timeout=20.0, follow_redirects=True) as client:
         return run_deployment_status_report(
             client,
             expect_commit=expect_commit,
             expect_actor_header_allowed=expect_actor_header_allowed,
+            expect_backup_scheduler_enabled=expect_backup_scheduler_enabled,
         )
 
 
@@ -197,10 +218,16 @@ def _deployment_check(
     base_url: str,
     expect_commit: str | None,
     expect_actor_header_allowed: bool | None,
+    expect_backup_scheduler_enabled: bool | None,
     deployment_runner: DeploymentRunner,
 ) -> dict[str, Any]:
     try:
-        report = deployment_runner(base_url, expect_commit, expect_actor_header_allowed)
+        report = deployment_runner(
+            base_url,
+            expect_commit,
+            expect_actor_header_allowed,
+            expect_backup_scheduler_enabled,
+        )
     except Exception as exc:  # pragma: no cover - depends on external network failures
         return _check(
             False,
@@ -248,7 +275,8 @@ def _next_actions(checks: dict[str, Any], *, base_url: str | None, latest_commit
         actions.append(
             "After the manual Render deploy, run: "
             f"python scripts\\release_preflight.py --base-url https://openjson.thelumen.work "
-            f"--expect-commit {commit_flag} --expect-actor-header-allowed false"
+            f"--expect-commit {commit_flag} --expect-actor-header-allowed false "
+            "--expect-backup-scheduler-enabled true"
         )
 
     return actions
@@ -260,6 +288,7 @@ def build_release_preflight_report(
     base_url: str | None = None,
     expect_commit: str | None = None,
     expect_actor_header_allowed: bool | None = None,
+    expect_backup_scheduler_enabled: bool | None = None,
     git_runner: CommandRunner = _run_command,
     deployment_runner: DeploymentRunner = _run_deployment,
 ) -> dict[str, Any]:
@@ -279,6 +308,7 @@ def build_release_preflight_report(
             base_url,
             effective_expect_commit,
             expect_actor_header_allowed,
+            expect_backup_scheduler_enabled,
             deployment_runner,
         )
 
@@ -297,6 +327,7 @@ def build_release_preflight_report(
             "deployment_base_url": base_url,
             "expected_deployed_commit": effective_expect_commit,
             "expected_actor_header_allowed": expect_actor_header_allowed,
+            "expected_backup_scheduler_enabled": expect_backup_scheduler_enabled,
             "next_actions": next_actions,
         },
     }
@@ -312,17 +343,26 @@ def main() -> None:
         choices=("true", "false"),
         help="Expected /version runtime_config.actor_header_allowed value for the deployment smoke.",
     )
+    parser.add_argument(
+        "--expect-backup-scheduler-enabled",
+        choices=("true", "false"),
+        help="Expected /version runtime_config.backup_scheduler_enabled value for the deployment smoke.",
+    )
     args = parser.parse_args()
 
     expected_actor_header_allowed = None
     if args.expect_actor_header_allowed is not None:
         expected_actor_header_allowed = args.expect_actor_header_allowed == "true"
+    expected_backup_scheduler_enabled = None
+    if args.expect_backup_scheduler_enabled is not None:
+        expected_backup_scheduler_enabled = args.expect_backup_scheduler_enabled == "true"
 
     report = build_release_preflight_report(
         args.repo_root,
         base_url=args.base_url,
         expect_commit=args.expect_commit,
         expect_actor_header_allowed=expected_actor_header_allowed,
+        expect_backup_scheduler_enabled=expected_backup_scheduler_enabled,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     if report["status"] != "ok":

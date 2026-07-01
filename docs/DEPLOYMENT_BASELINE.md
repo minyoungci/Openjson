@@ -143,6 +143,10 @@ The backup restore drill creates a backup, restores it into a temporary
 database, and requires the restored database combined integrity check to pass
 before the drill is considered successful.
 
+TASK_127 adds an optional in-process SQLite backup scheduler for the
+single-instance Render deployment. It runs inside the web service process so it
+can access the attached `/data` disk; Render cron jobs cannot access that disk.
+
 `scripts/release_preflight.py` treats these operational scripts as required
 release files, so a deployment preflight fails before deploy if the backup,
 restore, integrity, encryption helper, or restore-drill script is missing. See

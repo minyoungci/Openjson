@@ -201,9 +201,32 @@ python scripts\backup_restore_drill.py `
 The drill exits successfully only when backup integrity and restored database
 integrity are both `ok`. It deletes the temporary restored database by default.
 
+## SQLite Backup Scheduler
+
+For the current single-instance SQLite deployment, the FastAPI app can run a
+daily backup loop inside the web service process:
+
+```powershell
+$env:OPENJSON_BACKUP_SCHEDULER_ENABLED = "1"
+$env:OPENJSON_BACKUP_OUTPUT_DIR = "D:\OpenJson\backups"
+$env:OPENJSON_BACKUP_INTERVAL_SECONDS = "86400"
+$env:OPENJSON_BACKUP_RETENTION_COUNT = "7"
+$env:OPENJSON_BACKUP_ENCRYPT = "1"
+$env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
+```
+
+The scheduler reuses `scripts\backup_sqlite.py`. It logs structured
+`sqlite_backup_scheduler` events for started, completed, and failed backup
+attempts. A failed scheduled backup does not stop the web service.
+
+Render cron jobs cannot access a web service persistent disk, so the Render
+SQLite baseline intentionally uses this in-process scheduler instead of a
+separate cron service.
+
 ## Boundaries
 
-- Backup scheduling is not implemented.
+- Backup scheduling is implemented only for the current single-instance SQLite
+  deployment as an in-process web service task.
 - Backup retention is local filesystem retention only; there is no managed
   remote object storage lifecycle policy.
 - Backup encryption is implemented for the SQLite MVP script, but key

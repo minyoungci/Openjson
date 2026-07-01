@@ -49,3 +49,15 @@ services:
         value: "10000"
       - key: OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES
         value: "104857600"
+      - key: OPENJSON_BACKUP_SCHEDULER_ENABLED
+        value: "1"
+      - key: OPENJSON_BACKUP_OUTPUT_DIR
+        value: /data/backups
+      - key: OPENJSON_BACKUP_INTERVAL_SECONDS
+        value: "86400"
+      - key: OPENJSON_BACKUP_RETENTION_COUNT
+        value: "7"
+      - key: OPENJSON_BACKUP_ENCRYPT
+        value: "1"
+      - key: OPENJSON_BACKUP_ENCRYPTION_KEY
+        sync: false
