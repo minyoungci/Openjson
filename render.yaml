@@ -27,3 +27,9 @@ services:
         value: "1"
       - key: OPENJSON_ALLOW_ACTOR_HEADER
         value: "0"
+      - key: OPENJSON_RATE_LIMIT_ENABLED
+        value: "1"
+      - key: OPENJSON_RATE_LIMIT_REQUESTS
+        value: "120"
+      - key: OPENJSON_RATE_LIMIT_WINDOW_SECONDS
+        value: "60"

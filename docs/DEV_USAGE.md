@@ -63,6 +63,17 @@ Deployment smoke endpoints:
 when `database.migrations.status` is `ok`; pending or drifted migrations return
 HTTP 503 with the standard error envelope.
 
+Optional local HTTP rate limit:
+
+```powershell
+$env:OPENJSON_RATE_LIMIT_ENABLED = "1"
+$env:OPENJSON_RATE_LIMIT_REQUESTS = "120"
+$env:OPENJSON_RATE_LIMIT_WINDOW_SECONDS = "60"
+```
+
+Limited requests return `RATE_LIMITED` with HTTP 429. `/health`, `/ready`, and
+`OPTIONS` are exempt.
+
 ## Operational Smoke Commands
 
 Non-realtime shared edit HTTP smoke:
@@ -124,7 +135,8 @@ python scripts\smoke_deployment_status.py `
 
 This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
 and does not create users, projects, documents, or events. See
-`docs/TASK_114_PLAN.md` and `docs/TASK_115_PLAN.md`.
+`docs/TASK_114_PLAN.md`, `docs/TASK_115_PLAN.md`, and
+`docs/TASK_116_PLAN.md`.
 
 Local non-realtime editor shell:
 

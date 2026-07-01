@@ -5,6 +5,7 @@ from typing import Any
 
 from app.database import connect, get_schema_migration_status
 from app.errors import AppError, ErrorCode
+from app.rate_limit import RateLimitConfig
 
 
 REQUIRED_TABLES = {
@@ -45,6 +46,7 @@ def version_status(
     *,
     allow_actor_header: bool,
     cors_origins_configured: bool,
+    rate_limit_config: RateLimitConfig,
 ) -> dict[str, Any]:
     return {
         "service": "openjson-api",
@@ -63,6 +65,9 @@ def version_status(
             "actor_header_allowed": allow_actor_header,
             "cors_origins_configured": cors_origins_configured,
             "email_backend": _optional_env("OPENJSON_EMAIL_BACKEND") or "console",
+            "rate_limit_enabled": rate_limit_config.enabled,
+            "rate_limit_requests": rate_limit_config.requests,
+            "rate_limit_window_seconds": rate_limit_config.window_seconds,
             "redis_fanout_enabled": bool(_optional_env("OPENJSON_REDIS_URL")),
             "oidc_configured": all(
                 _optional_env(name)

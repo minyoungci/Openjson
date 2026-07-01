@@ -74,12 +74,21 @@ OPENJSON_CORS_ORIGINS=https://openjson.thelumen.work
 OPENJSON_EMAIL_BACKEND=console
 OPENJSON_REQUEST_LOGGING=1
 OPENJSON_ALLOW_ACTOR_HEADER=0
+OPENJSON_RATE_LIMIT_ENABLED=1
+OPENJSON_RATE_LIMIT_REQUESTS=120
+OPENJSON_RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
 `OPENJSON_ALLOW_ACTOR_HEADER=0` disables the development-only actor id fallback
 on the public deployment. The browser app uses session bearer tokens, and
 tokenless `X-Actor-Id` HTTP requests or WebSocket `actor_id` connections are
 rejected.
+
+The repository also enables a conservative in-process HTTP rate limit for the
+single-instance deployment. Limited responses return `RATE_LIMITED` with HTTP
+429 and `Retry-After`. `/health` and `/ready` are exempt so Render health
+checks keep working. This is not a replacement for Cloudflare abuse controls;
+keep Cloudflare proxied on the public domain before broader sharing.
 
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
@@ -150,7 +159,8 @@ persistent database before treating the deploy as live.
 
 `/version` should show the deployed Git commit from Render's
 `RENDER_GIT_COMMIT` default environment variable and
-`runtime_config.actor_header_allowed=false`.
+`runtime_config.actor_header_allowed=false`. It should also show
+`runtime_config.rate_limit_enabled=true`.
 
 You can run the deployment status smoke from this repo:
 
@@ -177,6 +187,9 @@ Then create an account from the UI and run a small document flow:
   accept URL to logs, but does not send actual invitation emails.
 - The public deployment disables the local `X-Actor-Id` / WebSocket
   `actor_id` fallback; use login/session tokens through the UI.
+- HTTP rate limiting is per-process fixed-window state. It is sufficient for
+  the initial single-instance Render service, but Cloudflare and/or Redis
+  should enforce distributed limits before scaling.
 - OIDC SSO is disabled until provider environment variables are configured.
 - Redis fanout is not provisioned in this baseline deployment.
 - PostgreSQL migration is required before serious production scale.

@@ -15,11 +15,14 @@ from app.database import KNOWN_SCHEMA_MIGRATIONS, SCHEMA_SQL, connect, init_db, 
 from app.errors import AppError, ErrorCode
 from app.health_service import readiness_status, version_status
 from app.main import create_app
+from app.rate_limit import RateLimitConfig
 from scripts.smoke_deployment_status import run_deployment_status_smoke
 
 
 class DeploymentHardeningTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._clear_rate_limit_env()
+        os.environ.pop("OPENJSON_CORS_ORIGINS", None)
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = str(Path(self.tmp.name) / "test.sqlite3")
         init_db(self.db_path)
@@ -27,6 +30,12 @@ class DeploymentHardeningTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
         os.environ.pop("OPENJSON_CORS_ORIGINS", None)
+        self._clear_rate_limit_env()
+
+    def _clear_rate_limit_env(self) -> None:
+        os.environ.pop("OPENJSON_RATE_LIMIT_ENABLED", None)
+        os.environ.pop("OPENJSON_RATE_LIMIT_REQUESTS", None)
+        os.environ.pop("OPENJSON_RATE_LIMIT_WINDOW_SECONDS", None)
 
     def _counts(self) -> dict[str, int]:
         from app.database import connect
@@ -72,6 +81,9 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertFalse(version.json()["runtime_config"]["actor_header_allowed"])
         self.assertTrue(version.json()["runtime_config"]["cors_origins_configured"])
         self.assertEqual(version.json()["runtime_config"]["email_backend"], "console")
+        self.assertFalse(version.json()["runtime_config"]["rate_limit_enabled"])
+        self.assertEqual(version.json()["runtime_config"]["rate_limit_requests"], 120)
+        self.assertEqual(version.json()["runtime_config"]["rate_limit_window_seconds"], 60)
         self.assertNotIn("do-not-leak", json.dumps(version.json()))
         self.assertEqual(ready.status_code, 200)
         self.assertEqual(ready.json()["status"], "ready")
@@ -110,15 +122,75 @@ class DeploymentHardeningTests(unittest.TestCase):
             "OPENJSON_OIDC_REDIRECT_URI": "https://openjson.example/auth/oidc/callback",
         }
         with patch.dict(os.environ, env, clear=False):
-            payload = version_status(allow_actor_header=True, cors_origins_configured=False)
+            payload = version_status(
+                allow_actor_header=True,
+                cors_origins_configured=False,
+                rate_limit_config=RateLimitConfig(enabled=True, requests=77, window_seconds=30),
+            )
 
         self.assertEqual(payload["source"]["git_commit"], "explicit-sha")
         self.assertEqual(payload["source"]["git_branch"], "release")
         self.assertEqual(payload["source"]["git_repo_slug"], "custom/repo")
         self.assertTrue(payload["runtime_config"]["actor_header_allowed"])
+        self.assertTrue(payload["runtime_config"]["rate_limit_enabled"])
+        self.assertEqual(payload["runtime_config"]["rate_limit_requests"], 77)
+        self.assertEqual(payload["runtime_config"]["rate_limit_window_seconds"], 30)
         self.assertTrue(payload["runtime_config"]["redis_fanout_enabled"])
         self.assertTrue(payload["runtime_config"]["oidc_configured"])
         self.assertNotIn("secret", json.dumps(payload))
+
+    def test_rate_limit_returns_standard_error_and_headers(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "OPENJSON_RATE_LIMIT_ENABLED": "1",
+                "OPENJSON_RATE_LIMIT_REQUESTS": "2",
+                "OPENJSON_RATE_LIMIT_WINDOW_SECONDS": "60",
+            },
+            clear=False,
+        ):
+            client = TestClient(create_app(self.db_path))
+            first = client.get("/version", headers={"X-Forwarded-For": "203.0.113.10"})
+            second = client.get("/version", headers={"X-Forwarded-For": "203.0.113.10"})
+            third = client.get(
+                "/version",
+                headers={
+                    "X-Forwarded-For": "203.0.113.10",
+                    "X-Request-Id": "req_rate_limited",
+                },
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(third.status_code, 429)
+        self.assertEqual(third.json()["error"]["code"], ErrorCode.RATE_LIMITED)
+        self.assertEqual(third.json()["error"]["details"]["limit"], 2)
+        self.assertEqual(third.json()["error"]["details"]["window_seconds"], 60)
+        self.assertEqual(third.headers["X-RateLimit-Limit"], "2")
+        self.assertEqual(third.headers["X-RateLimit-Remaining"], "0")
+        self.assertEqual(third.headers["X-Request-Id"], "req_rate_limited")
+        self.assertIn("Retry-After", third.headers)
+
+    def test_rate_limit_exempts_health_and_ready(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "OPENJSON_RATE_LIMIT_ENABLED": "1",
+                "OPENJSON_RATE_LIMIT_REQUESTS": "1",
+                "OPENJSON_RATE_LIMIT_WINDOW_SECONDS": "60",
+            },
+            clear=False,
+        ):
+            client = TestClient(create_app(self.db_path))
+            health_responses = [client.get("/health") for _ in range(3)]
+            ready_responses = [client.get("/ready") for _ in range(3)]
+            first_version = client.get("/version", headers={"X-Forwarded-For": "203.0.113.11"})
+            second_version = client.get("/version", headers={"X-Forwarded-For": "203.0.113.11"})
+
+        self.assertEqual([response.status_code for response in health_responses], [200, 200, 200])
+        self.assertEqual([response.status_code for response in ready_responses], [200, 200, 200])
+        self.assertEqual(first_version.status_code, 200)
+        self.assertEqual(second_version.status_code, 429)
 
     def test_ready_failure_uses_standard_error_envelope(self) -> None:
         empty_db = str(Path(self.tmp.name) / "empty.sqlite3")
@@ -225,6 +297,8 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn("__pycache__/", dockerignore)
         self.assertIn("OPENJSON_ALLOW_ACTOR_HEADER", render_yaml)
         self.assertIn('value: "0"', render_yaml)
+        self.assertIn("OPENJSON_RATE_LIMIT_ENABLED", render_yaml)
+        self.assertIn("OPENJSON_RATE_LIMIT_REQUESTS", render_yaml)
 
     def test_deployment_status_smoke_runner_uses_public_read_only_surfaces(self) -> None:
         before = self._counts()
@@ -233,6 +307,9 @@ class DeploymentHardeningTests(unittest.TestCase):
             {
                 "OPENJSON_GIT_COMMIT": "smoke-sha",
                 "OPENJSON_ALLOW_ACTOR_HEADER": "0",
+                "OPENJSON_RATE_LIMIT_ENABLED": "1",
+                "OPENJSON_RATE_LIMIT_REQUESTS": "10",
+                "OPENJSON_RATE_LIMIT_WINDOW_SECONDS": "60",
             },
             clear=False,
         ):
@@ -246,6 +323,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["ready"]["database"]["migrations"]["status"], "ok")
         self.assertEqual(result["version"]["source"]["git_commit"], "smoke-sha")
+        self.assertTrue(result["version"]["runtime_config"]["rate_limit_enabled"])
         self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
         self.assertTrue(result["app"]["contains_openjson"])
         self.assertEqual(self._counts(), before)

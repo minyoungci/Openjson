@@ -95,6 +95,10 @@ All API errors use:
 }
 ```
 
+Rate limited requests use `RATE_LIMITED` with HTTP 429 and include
+`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and
+`Retry-After` headers.
+
 ## Local UI
 
 - `GET /`
@@ -139,6 +143,7 @@ developer identity fallback from the static browser app.
 See `docs/TASK_113_PLAN.md` for the deployment auth fallback gate.
 See `docs/TASK_114_PLAN.md` for the public deployment version surface.
 See `docs/TASK_115_PLAN.md` for the readiness migration gate.
+See `docs/TASK_116_PLAN.md` for the HTTP rate limit guard.
 
 ## Deployment Version
 
@@ -154,6 +159,11 @@ used for manual deploy verification:
 
 It must not expose secrets, database paths, API tokens, session tokens, SMTP
 passwords, or OIDC client secrets.
+It may include non-secret rate-limit flags:
+
+- `runtime_config.rate_limit_enabled`
+- `runtime_config.rate_limit_requests`
+- `runtime_config.rate_limit_window_seconds`
 
 ## Deployment Readiness
 

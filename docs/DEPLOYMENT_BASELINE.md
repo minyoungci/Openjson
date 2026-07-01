@@ -23,7 +23,8 @@ These endpoints are public and do not require `X-Actor-Id`.
 `/health` confirms the API process is running.
 
 `/ready` confirms the configured SQLite database is reachable, foreign keys are
-enabled on the checked connection, and required tables exist.
+enabled on the checked connection, required tables exist, and the schema
+migration ledger is current.
 
 Readiness failures use the standard error envelope with `INTERNAL_ERROR` and
 HTTP 503.
@@ -55,12 +56,19 @@ See `docs/MIGRATIONS_BASELINE.md` for the SQLite MVP migration ledger policy.
   middleware is not enabled.
 - `OPENJSON_REQUEST_LOGGING`: set to `1`, `true`, or `yes` to emit structured
   request logs to stdout.
+- `OPENJSON_RATE_LIMIT_ENABLED`: set to `1`, `true`, or `yes` to enable the
+  in-process HTTP rate limit.
+- `OPENJSON_RATE_LIMIT_REQUESTS`: request count per fixed window. Defaults to
+  `120`.
+- `OPENJSON_RATE_LIMIT_WINDOW_SECONDS`: fixed window size in seconds. Defaults
+  to `60`.
 
 Example:
 
 ```powershell
 $env:OPENJSON_DB_PATH = "D:\OpenJson\openjson.sqlite3"
 $env:OPENJSON_CORS_ORIGINS = "http://localhost:3000"
+$env:OPENJSON_RATE_LIMIT_ENABLED = "1"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -91,7 +99,7 @@ curl http://127.0.0.1:8000/ready
   deployment architecture.
 - The current `X-Actor-Id` header is local development identity only.
 - TASK_012 adds project-scoped API tokens, but not password login, sessions,
-  refresh tokens, SSO, token expiry, or rate limiting.
+  refresh tokens, SSO, token expiry, or distributed/plan-based rate limiting.
 - Secrets, managed database credentials, TLS, centralized logging, and error
   tracking are not implemented in this task.
 - Document mutation integrity remains enforced by `document_events` and replay

@@ -113,6 +113,8 @@ Bearer-token document patch preview scope is pinned in
 - No password login.
 - No refresh token flow.
 - No token expiry yet.
-- No rate limiting yet.
+- TASK_116 adds a simple in-process HTTP rate limit for the single-instance
+  deployment. Distributed limits, WebSocket message limits, and plan-based
+  quotas remain future work.
 - No admin-wide token management yet.
 - No token rotation endpoint yet.
