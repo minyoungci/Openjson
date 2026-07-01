@@ -526,6 +526,13 @@ protects transient browser collaboration, live-text, and error-rendering state
 without changing `editor_presence`, canonical snapshots, append-only
 `document_events`, or in-process server text sessions.
 
+TASK_155 stale browser bootstrap response guarding also adds no table. The
+static browser client records a transient request id for project
+editor-bootstrap loads and applies a response only while it still matches the
+latest request and active project id. This protects browser UI state without
+changing canonical snapshots, append-only `document_events`, project
+membership, comments, schemas, or WebSocket state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -208,6 +208,8 @@ WebSocket message guard so project document-list updates are scoped to the
 active project socket.
 See `docs/TASK_154_PLAN.md` for guarding stale browser document collaboration
 WebSocket messages after socket replacement or document switches.
+See `docs/TASK_155_PLAN.md` for guarding stale browser project bootstrap
+responses after project switches, logout, or refresh races.
 
 ## Deployment Version
 
@@ -642,6 +644,10 @@ static browser client processes project workspace WebSocket messages only from
 the currently active project socket and still ignores
 `project.documents.changed` payloads whose `project_id` does not match the
 selected project.
+The static browser client also applies project editor-bootstrap responses only
+when the response belongs to the latest browser bootstrap request and the same
+active project id, so delayed HTTP responses cannot overwrite the current
+project/document UI after navigation or logout.
 
 Offline sync accepts a batch of queued client content-save operations:
 

@@ -118,6 +118,7 @@
     selectedDocumentId: initialParams.get("document_id") || localStorage.getItem("openjson.selectedDocumentId") || "",
     selectedEditorState: null,
     bootstrap: null,
+    bootstrapRequestId: 0,
     projectSchemas: [],
     schemaListError: null,
     projectMembers: [],
@@ -748,6 +749,8 @@
     state.refreshToken = "";
     state.projectId = "";
     state.selectedDocumentId = "";
+    state.bootstrapRequestId += 1;
+    state.loading = false;
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
@@ -802,6 +805,9 @@
       showProjectScreen("Create or select a project first.");
       return;
     }
+    const projectId = state.projectId;
+    const requestId = state.bootstrapRequestId + 1;
+    state.bootstrapRequestId = requestId;
     state.loading = true;
     syncButtons();
     const params = {
@@ -813,14 +819,30 @@
     if (selectedDocumentId) {
       params.selected_document_id = selectedDocumentId;
     }
-    const [data, schemaData, memberData, usageData] = await Promise.all([
-      apiFetch(`/projects/${encodeURIComponent(state.projectId)}/editor-bootstrap`, {
-        query: params,
-      }),
-      fetchProjectSchemasSafe(),
-      fetchProjectMembersSafe(),
-      fetchProjectUsageSafe(),
-    ]);
+    let result;
+    try {
+      result = await Promise.all([
+        apiFetch(`/projects/${encodeURIComponent(projectId)}/editor-bootstrap`, {
+          query: params,
+        }),
+        fetchProjectSchemasSafe(projectId),
+        fetchProjectMembersSafe(projectId),
+        fetchProjectUsageSafe(projectId),
+      ]);
+    } catch (error) {
+      if (!isCurrentBootstrapRequest(requestId, projectId)) {
+        finishStaleBootstrapRequest(requestId);
+        return;
+      }
+      state.loading = false;
+      syncButtons();
+      throw error;
+    }
+    if (!isCurrentBootstrapRequest(requestId, projectId)) {
+      finishStaleBootstrapRequest(requestId);
+      return;
+    }
+    const [data, schemaData, memberData, usageData] = result;
     state.bootstrap = data;
     state.projectSchemas = schemaData.schemas;
     state.schemaListError = schemaData.error;
@@ -848,27 +870,50 @@
     syncButtons();
   }
 
-  async function fetchProjectSchemasSafe() {
+  function isCurrentBootstrapRequest(requestId, projectId) {
+    return state.bootstrapRequestId === requestId && state.projectId === projectId;
+  }
+
+  function finishStaleBootstrapRequest(requestId) {
+    if (state.bootstrapRequestId === requestId) {
+      state.loading = false;
+      syncButtons();
+    }
+  }
+
+  async function fetchProjectSchemasSafe(projectId) {
+    const targetProjectId = projectId || state.projectId;
+    if (!targetProjectId) {
+      return { schemas: [], error: null };
+    }
     try {
-      const data = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/schemas`);
+      const data = await apiFetch(`/projects/${encodeURIComponent(targetProjectId)}/schemas`);
       return { schemas: data.schemas || [], error: null };
     } catch (error) {
       return { schemas: [], error };
     }
   }
 
-  async function fetchProjectMembersSafe() {
+  async function fetchProjectMembersSafe(projectId) {
+    const targetProjectId = projectId || state.projectId;
+    if (!targetProjectId) {
+      return { members: [], error: null };
+    }
     try {
-      const data = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/members`);
+      const data = await apiFetch(`/projects/${encodeURIComponent(targetProjectId)}/members`);
       return { members: data.members || [], error: null };
     } catch (error) {
       return { members: [], error };
     }
   }
 
-  async function fetchProjectUsageSafe() {
+  async function fetchProjectUsageSafe(projectId) {
+    const targetProjectId = projectId || state.projectId;
+    if (!targetProjectId) {
+      return { usage: null, error: null };
+    }
     try {
-      const data = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/usage`);
+      const data = await apiFetch(`/projects/${encodeURIComponent(targetProjectId)}/usage`);
       return { usage: data, error: null };
     } catch (error) {
       return { usage: null, error };
