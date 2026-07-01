@@ -48,6 +48,8 @@
     inviteRole: $("inviteRoleSelect"),
     createInviteButton: $("createInviteButton"),
     inviteToken: $("inviteTokenInput"),
+    inviteLink: $("inviteLinkInput"),
+    copyInviteLinkButton: $("copyInviteLinkButton"),
     acceptInviteButton: $("acceptInviteButton"),
     teamActionOutput: $("teamActionOutput"),
     newDocumentButton: $("newDocumentButton"),
@@ -267,11 +269,16 @@
       createProjectInvite().catch((error) => renderError(els.teamActionOutput, error));
     });
 
+    els.copyInviteLinkButton.addEventListener("click", () => {
+      copyInviteLink().catch((error) => renderError(els.teamActionOutput, error));
+    });
+
     els.acceptInviteButton.addEventListener("click", () => {
       acceptProjectInvite().catch((error) => renderError(els.projectSetupOutput, error));
     });
 
     els.inviteToken.addEventListener("input", () => {
+      updateInviteLinkField();
       syncButtons();
     });
 
@@ -511,6 +518,7 @@
     state.projectId = projectId;
     els.projectId.value = projectId;
     localStorage.setItem("openjson.projectId", projectId);
+    clearInviteResult();
   }
 
   function showAuthScreen(message) {
@@ -676,6 +684,7 @@
     els.token.value = "";
     els.actorId.value = "";
     els.projectId.value = "";
+    clearInviteResult();
     localStorage.removeItem("openjson.token");
     localStorage.removeItem("openjson.refreshToken");
     localStorage.removeItem("openjson.actorId");
@@ -770,6 +779,7 @@
       },
     });
     els.inviteToken.value = invitation.token || "";
+    updateInviteLinkField();
     renderInvitationResult(invitation);
   }
 
@@ -799,7 +809,38 @@
         "error-text",
       );
     }
-    renderText(els.teamActionOutput, "Invite token is available below as a fallback.", "muted");
+    renderText(els.teamActionOutput, "Invite link and token are available below as fallback join paths.", "muted");
+  }
+
+  function buildInviteUrl(token) {
+    const url = new URL("/app", window.location.origin);
+    url.searchParams.set("invite_token", token);
+    return url;
+  }
+
+  function updateInviteLinkField() {
+    const token = els.inviteToken.value.trim();
+    els.inviteLink.value = token ? buildInviteUrl(token).toString() : "";
+  }
+
+  function clearInviteResult() {
+    els.inviteToken.value = "";
+    els.inviteLink.value = "";
+    clearPanel(els.teamActionOutput, "Invite a teammate by email, then share the generated link or token.");
+  }
+
+  async function copyInviteLink() {
+    const link = els.inviteLink.value.trim();
+    if (!link) {
+      renderText(els.teamActionOutput, "Create an invite before copying its link.", "error-text");
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(link);
+      renderText(els.teamActionOutput, "Invite link copied.", "ok-text");
+      return;
+    }
+    renderText(els.teamActionOutput, link, "muted");
   }
 
   async function acceptProjectInvite() {
@@ -1620,6 +1661,7 @@
     els.zipApplyButton.disabled = busy || !state.zipFile || !state.zipPreview || !state.zipPreview.can_apply;
     els.refreshTeamButton.disabled = busy || !state.projectId;
     els.createInviteButton.disabled = busy || !state.projectId;
+    els.copyInviteLinkButton.disabled = busy || !els.inviteLink.value.trim();
     els.acceptInviteButton.disabled = busy || !els.projectInviteToken.value.trim();
     els.createDocumentButton.disabled = busy || Boolean(ambiguousSchema);
     els.validateButton.disabled = busy || !hasDoc || !canValidate;

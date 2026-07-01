@@ -153,6 +153,13 @@ button:disabled {
   gap: 10px;
 }
 
+.invite-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;

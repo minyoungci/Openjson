@@ -113,6 +113,8 @@ See `docs/TASK_103_PLAN.md` for local sessions, invitation tokens,
 token-aware WebSockets, optional Redis fanout, and safe auto-merge.
 See `docs/TASK_104_PLAN.md` for transient text collaboration, invitation
 email delivery, refresh-token rotation, OIDC SSO, and offline sync.
+See `docs/TASK_107_PLAN.md` for invitation email delivery status rendering.
+See `docs/TASK_108_PLAN.md` for full invite-link display and copy controls.
 
 ## Bootstrap, Workspace, Project
 

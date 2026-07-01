@@ -237,6 +237,15 @@
               Invite token
               <input id="inviteTokenInput" autocomplete="off" readonly placeholder="oji_..." />
             </label>
+            <div class="invite-link-row">
+              <label class="stacked-label">
+                Invite link
+                <input id="inviteLinkInput" autocomplete="off" readonly placeholder="https://.../app?invite_token=..." />
+              </label>
+              <button id="copyInviteLinkButton" class="icon-button" type="button" title="Copy invite link" aria-label="Copy invite link">
+                <svg><use href="#icon-link"></use></svg>
+              </button>
+            </div>
             <div id="teamActionOutput" class="dense-output compact-output">Invite a teammate by email, then share the generated token.</div>
           </section>
 

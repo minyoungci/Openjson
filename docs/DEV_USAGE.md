@@ -118,9 +118,11 @@ WebSocket token authentication, and a conservative auto-merge toggle for stale
 full-content saves on non-overlapping object paths. See
 `docs/TASK_103_PLAN.md`.
 The shell now also supports transient live text operations, live-text commit,
-local offline save queue flushing, refresh-token rotation, and invite links.
+local offline save queue flushing, refresh-token rotation, invite email delivery
+status, and full invite-link copy controls.
 It is still not full offline-first replicated storage or general conflict
-auto-resolution. See `docs/TASK_104_PLAN.md`.
+auto-resolution. See `docs/TASK_104_PLAN.md`, `docs/TASK_107_PLAN.md`, and
+`docs/TASK_108_PLAN.md`.
 
 Local session and invitation smoke:
 
@@ -345,16 +347,15 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 Local team UI smoke:
 
-1. Seed dev data and open `/app?project_id=project_dev&actor_id=user_dev`.
-2. In the Team panel, create a local user.
-3. Add the created user to `project_dev` as `editor` or `viewer`.
-4. Or use Account to sign up/login, create an invite token, and accept it from
-   the second account.
-5. Click `Use` on a member row to switch the local actor.
-6. Open the same document in two browser windows with different `actor_id`
-   values and confirm active users/checkpoints update through WebSocket with
+1. Sign up or log in as the project owner and open the project.
+2. In the Team panel, create an invite for the second user's email address.
+3. Copy the generated invite link or raw token.
+4. In another browser profile/window, open the invite link, sign up or log in
+   with the invited email address, and click Join.
+5. Open the same document in two browser windows with different logged-in
+   users and confirm active users/checkpoints update through WebSocket with
    HTTP polling fallback.
-7. Enable Auto-merge only for non-overlapping object-field edits; array edits
+6. Enable Auto-merge only for non-overlapping object-field edits; array edits
    and same-path edits should still show a conflict.
 
 For stale non-realtime raw editor saves, preview client/server changes before
