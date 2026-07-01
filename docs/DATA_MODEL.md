@@ -512,6 +512,13 @@ longer active and ignores live-text state or commit payloads whose
 transient editor state without changing canonical snapshots, append-only
 `document_events`, or in-process server text sessions.
 
+TASK_153 project workspace WebSocket guard fixing also adds no table. The
+static browser client accepts project document-list WebSocket messages only
+from the active project workspace socket and keeps the existing `project_id`
+payload check before refreshing derived project bootstrap state. This changes
+only transient browser behavior and does not create a project event store,
+alter canonical snapshots, or mutate append-only `document_events`.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

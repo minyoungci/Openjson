@@ -203,6 +203,9 @@ See `docs/TASK_151_PLAN.md` for ignoring stale browser collaboration-state
 payloads after document switches.
 See `docs/TASK_152_PLAN.md` for guarding stale live-text WebSocket payloads
 after socket replacement or document switches.
+See `docs/TASK_153_PLAN.md` for fixing the browser project workspace
+WebSocket message guard so project document-list updates are scoped to the
+active project socket.
 
 ## Deployment Version
 
@@ -628,7 +631,11 @@ restore. The payload contains `project_id`, `actor_id`, `reason`, and a compact
 marker, and schema id when present. Browser clients should refresh
 `GET /projects/{project_id}/editor-bootstrap` when their current editor buffer
 is clean, and should delay refresh while a local buffer is dirty. These
-notifications are operational only and do not add a project event store.
+notifications are operational only and do not add a project event store. The
+static browser client processes project workspace WebSocket messages only from
+the currently active project socket and still ignores
+`project.documents.changed` payloads whose `project_id` does not match the
+selected project.
 
 Offline sync accepts a batch of queued client content-save operations:
 

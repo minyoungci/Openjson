@@ -1827,7 +1827,7 @@
     state.projectSocketProjectId = projectId;
 
     socket.addEventListener("message", (event) => {
-      if (state.collaborationSocket !== socket) {
+      if (state.projectSocket !== socket) {
         return;
       }
       let payload;

@@ -206,6 +206,11 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("/ws/projects/", js.text)
         self.assertIn("project.documents.changed", js.text)
         self.assertIn("applyProjectDocumentsChanged", js.text)
+        project_socket_handler = js.text.split("function openProjectWorkspaceSocket()", 1)[1].split(
+            "function openCollaborationSocket()", 1
+        )[0]
+        self.assertIn("if (state.projectSocket !== socket)", project_socket_handler)
+        self.assertNotIn("state.collaborationSocket !== socket", project_socket_handler)
         self.assertIn("Project documents changed. Save or reload", js.text)
         self.assertIn("Project documents updated.", js.text)
         self.assertIn("result.document_id !== state.selectedDocumentId", js.text)
