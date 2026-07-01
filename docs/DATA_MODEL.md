@@ -439,6 +439,13 @@ stale transient session and rebuilds it from latest editor-state
 be preserved and re-diffed, but canonical storage and append-only
 `document_events` remain unchanged until a later valid commit succeeds.
 
+TASK_141 accepted HTTP mutation checkpoint broadcast also adds no table. After
+the document mutation transaction commits, the API derives a fresh
+`collaboration_state` from `json_documents`, `document_events`, and
+`editor_presence`, then publishes it to active WebSocket clients. Broadcast
+payloads are operational notifications only; they do not persist new canonical
+state and they are skipped for failed or preview-only mutations.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -181,6 +181,8 @@ See `docs/TASK_139_PLAN.md` for rejecting out-of-bounds live-text operations
 instead of silently clamping indexes or ranges.
 See `docs/TASK_140_PLAN.md` for resetting stale live-text sessions when the
 canonical document version changes outside the transient text session.
+See `docs/TASK_141_PLAN.md` for automatic WebSocket checkpoint broadcasts after
+accepted HTTP document mutations.
 
 ## Deployment Version
 
@@ -482,7 +484,12 @@ editor presence and accepted `document_events` checkpoints. Presence rows are
 transient operational state; they do not alter snapshots or document event
 history. Autosave in the local editor calls the existing content save API, so
 an accepted autosave is a normal append-only `event_type = "update"` document
-event. TASK_102 exposes the same state over
+event. Accepted HTTP document mutations that leave the document active,
+including `PATCH /documents/{id}`, `PUT /documents/{id}/content`, and
+`POST /documents/{id}/rollback`, broadcast a fresh `collaboration_state` to
+active WebSocket clients for that document after the transaction commits. Failed
+mutations and preview endpoints do not broadcast. TASK_102 exposes the same
+state over
 `WS /ws/documents/{document_id}/collaboration?actor_id={actor_id}` when the
 development actor-id fallback is enabled. TASK_103 also accepts
 `token=ojs_<session token>` or an API token query parameter for browser

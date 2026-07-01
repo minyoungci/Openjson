@@ -158,6 +158,85 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertEqual(message["state"]["current_version"], 2)
         self.assertEqual(message["state"]["checkpoints"][0]["result_version"], 2)
 
+    def test_http_patch_endpoint_broadcasts_checkpoint_without_client_refresh(self) -> None:
+        with self.client.websocket_connect(self._ws_path(self.owner_id)) as websocket:
+            websocket.receive_json()
+            response = self.client.patch(
+                f"/documents/{self.document['id']}",
+                headers={"X-Actor-Id": self.editor_id},
+                json={
+                    "base_version": 1,
+                    "patch": [{"op": "replace", "path": "/learning_rate", "value": 0.02}],
+                    "reason": "HTTP patch checkpoint",
+                },
+            )
+            message = websocket.receive_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["current_version"], 2)
+        self.assertEqual(message["type"], "collaboration_state")
+        self.assertEqual(message["reason"], "document.patch")
+        self.assertTrue(message["state"]["has_updates"])
+        self.assertEqual(message["state"]["since_version"], 1)
+        self.assertEqual(message["state"]["current_version"], 2)
+        self.assertEqual(message["state"]["checkpoints"][0]["event_id"], response.json()["event_id"])
+        self.assertEqual(message["state"]["checkpoints"][0]["actor_id"], self.editor_id)
+        self.assertEqual(message["state"]["checkpoints"][0]["changed_paths"], ["/learning_rate"])
+
+    def test_http_content_endpoint_broadcasts_checkpoint_without_client_refresh(self) -> None:
+        with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:
+            websocket.receive_json()
+            response = self.client.put(
+                f"/documents/{self.document['id']}/content",
+                headers={"X-Actor-Id": self.editor_id},
+                json={
+                    "base_version": 1,
+                    "content": {"name": "saved", "learning_rate": 0.01},
+                    "reason": "HTTP content checkpoint",
+                },
+            )
+            message = websocket.receive_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["current_version"], 2)
+        self.assertEqual(message["type"], "collaboration_state")
+        self.assertEqual(message["reason"], "document.content")
+        self.assertTrue(message["state"]["has_updates"])
+        self.assertEqual(message["state"]["since_version"], 1)
+        self.assertEqual(message["state"]["current_version"], 2)
+        self.assertEqual(message["state"]["checkpoints"][0]["event_id"], response.json()["event_id"])
+        self.assertEqual(message["state"]["checkpoints"][0]["changed_paths"], ["/name"])
+
+    def test_http_rollback_endpoint_broadcasts_checkpoint_without_client_refresh(self) -> None:
+        patched = patch_document(
+            self.db_path,
+            document_id=self.document["id"],
+            actor_id=self.editor_id,
+            base_version=1,
+            patch=[{"op": "replace", "path": "/learning_rate", "value": 0.02}],
+        )
+        self.assertEqual(patched["current_version"], 2)
+
+        with self.client.websocket_connect(self._ws_path(self.editor_id)) as websocket:
+            websocket.receive_json()
+            response = self.client.post(
+                f"/documents/{self.document['id']}/rollback",
+                headers={"X-Actor-Id": self.owner_id},
+                json={"base_version": 2, "target_version": 1, "reason": "HTTP rollback checkpoint"},
+            )
+            message = websocket.receive_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["current_version"], 3)
+        self.assertEqual(response.json()["event_type"], "rollback")
+        self.assertEqual(message["type"], "collaboration_state")
+        self.assertEqual(message["reason"], "document.rollback")
+        self.assertTrue(message["state"]["has_updates"])
+        self.assertEqual(message["state"]["since_version"], 2)
+        self.assertEqual(message["state"]["current_version"], 3)
+        self.assertEqual(message["state"]["checkpoints"][0]["event_id"], response.json()["event_id"])
+        self.assertEqual(message["state"]["checkpoints"][0]["event_type"], "rollback")
+
     def test_viewer_editing_presence_is_rejected_and_closed(self) -> None:
         with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:
             websocket.receive_json()

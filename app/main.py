@@ -177,6 +177,26 @@ def _request_fields_set(request: object) -> set[str]:
     return set(getattr(request, "__fields_set__", set()))
 
 
+async def _broadcast_document_mutation_checkpoint(
+    db_path: str,
+    *,
+    document_id: str,
+    actor_id: str | None,
+    previous_version: int | None,
+    reason: str,
+) -> None:
+    try:
+        state = get_collaboration_state(
+            db_path,
+            document_id=document_id,
+            actor_id=actor_id,
+            since_version=previous_version,
+        )
+    except AppError:
+        return
+    await collaboration_hub.broadcast_state(document_id, state, reason=reason)
+
+
 def _unexpected_error_details(request: Request | None, exc: Exception, *, debug: bool) -> dict:
     request_id = None
     if request is not None:
@@ -1139,12 +1159,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 )
 
     @application.patch("/documents/{document_id}")
-    def patch_document_endpoint(
+    async def patch_document_endpoint(
         document_id: str,
         request: PatchDocumentRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return patch_document(
+        result = patch_document(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
@@ -1152,6 +1172,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
             patch=request.patch,
             reason=request.reason,
         )
+        await _broadcast_document_mutation_checkpoint(
+            application.state.db_path,
+            document_id=document_id,
+            actor_id=actor_id,
+            previous_version=result.get("previous_version"),
+            reason="document.patch",
+        )
+        return result
 
     @application.post("/documents/{document_id}/patch-preview")
     def patch_preview_endpoint(
@@ -1204,13 +1232,13 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
 
     @application.put("/documents/{document_id}/content")
-    def content_update_endpoint(
+    async def content_update_endpoint(
         document_id: str,
         request: ContentUpdateRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
         fields = _request_fields_set(request)
-        return update_document_content(
+        result = update_document_content(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
@@ -1222,6 +1250,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
             reason=request.reason,
             merge_strategy=request.merge_strategy,
         )
+        await _broadcast_document_mutation_checkpoint(
+            application.state.db_path,
+            document_id=document_id,
+            actor_id=actor_id,
+            previous_version=result.get("previous_version"),
+            reason="document.content",
+        )
+        return result
 
     @application.delete("/documents/{document_id}")
     def delete_document_endpoint(
@@ -1308,12 +1344,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
 
     @application.post("/documents/{document_id}/rollback")
-    def rollback_endpoint(
+    async def rollback_endpoint(
         document_id: str,
         request: RollbackDocumentRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return rollback_document(
+        result = rollback_document(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
@@ -1321,6 +1357,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
             target_version=request.target_version,
             reason=request.reason,
         )
+        await _broadcast_document_mutation_checkpoint(
+            application.state.db_path,
+            document_id=document_id,
+            actor_id=actor_id,
+            previous_version=result.get("previous_version"),
+            reason="document.rollback",
+        )
+        return result
 
     @application.post("/projects/{project_id}/schemas")
     def create_schema_endpoint(
