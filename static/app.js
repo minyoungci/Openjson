@@ -127,6 +127,7 @@
     validationRequestId: 0,
     previewRequestId: 0,
     conflictPreviewRequestId: 0,
+    keepLocalBufferRequestId: 0,
     historyRequestId: 0,
     diffRequestId: 0,
     bootstrap: null,
@@ -439,6 +440,7 @@
 
     els.editorBuffer.addEventListener("input", () => {
       invalidateEditorFileImportRequests();
+      invalidateKeepLocalBufferRequests();
       handleLiveTextInput();
       updateSyntaxState();
       schedulePresenceCursorUpdate();
@@ -1059,6 +1061,7 @@
     invalidateDocumentPanelRequests();
     invalidateSaveRequests();
     invalidateRollbackRequests();
+    invalidateKeepLocalBufferRequests();
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
@@ -1665,6 +1668,7 @@
       invalidateRollbackRequests();
       invalidateOfflineSyncRequests();
       invalidatePresenceHeartbeatRequests();
+      invalidateKeepLocalBufferRequests();
       invalidateCreateDocumentRequests();
       invalidateCreateFileImportRequests();
       invalidateEditorFileImportRequests();
@@ -1713,6 +1717,7 @@
     invalidateRollbackRequests();
     invalidateOfflineSyncRequests();
     invalidatePresenceHeartbeatRequests();
+    invalidateKeepLocalBufferRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
     invalidateCreateFileImportRequests();
@@ -2194,6 +2199,10 @@
     state.rollingBack = false;
   }
 
+  function invalidateKeepLocalBufferRequests() {
+    state.keepLocalBufferRequestId += 1;
+  }
+
   async function loadConflictPreview(error) {
     const documentId = state.selectedDocumentId;
     const contentText = els.editorBuffer.value;
@@ -2233,12 +2242,25 @@
     }
     const documentId = state.selectedDocumentId;
     const localText = state.conflictLocalText;
+    const requestId = state.keepLocalBufferRequestId + 1;
+    state.keepLocalBufferRequestId = requestId;
     invalidateEditorFileImportRequests();
     await loadBootstrap(documentId);
+    if (!isCurrentKeepLocalBufferRequest(requestId, documentId, localText)) {
+      return;
+    }
     els.editorBuffer.value = localText;
     updateSyntaxState();
     syncButtons();
     setEditorStatus("Local buffer kept on latest base. Preview before saving.", "info");
+  }
+
+  function isCurrentKeepLocalBufferRequest(requestId, documentId, localText) {
+    return (
+      state.keepLocalBufferRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.conflictLocalText === localText
+    );
   }
 
   async function loadHistory() {

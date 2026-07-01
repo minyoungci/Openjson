@@ -626,6 +626,12 @@ client applies the same one-time refresh-token retry policy to binary ZIP
 upload requests that JSON API calls already use. This does not change
 refresh-token storage, ZIP import transactions, import artifacts, permissions,
 canonical snapshots, or append-only `document_events`.
+TASK_179 stale conflict keep-local-buffer guarding also adds no table. The
+static browser client tracks the in-flight conflict recovery action in memory
+and restores the preserved local buffer only while the selected document and
+captured conflict text still match. This protects transient editor state
+without changing conflict-preview APIs, save APIs, canonical snapshots,
+offline sync, WebSocket behavior, or append-only `document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

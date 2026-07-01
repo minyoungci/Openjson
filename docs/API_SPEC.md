@@ -270,6 +270,8 @@ enqueueing old content into the offline sync queue after document or editor
 context changes.
 See `docs/TASK_178_PLAN.md` for refreshing expired browser sessions for binary
 ZIP upload requests before surfacing 401 failures.
+See `docs/TASK_179_PLAN.md` for guarding stale conflict keep-local-buffer
+actions after document, session, or editor-buffer changes.
 
 ## Deployment Version
 

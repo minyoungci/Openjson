@@ -561,6 +561,28 @@ class StaticUiTests(unittest.TestCase):
             "if (!isCurrentConflictPreviewRequest(requestId, documentId, baseVersion, contentText))",
             conflict_preview_loader,
         )
+        keep_local_loader = js.text.split("async function keepLocalBufferOnLatest()", 1)[1].split(
+            "async function loadHistory", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", keep_local_loader)
+        self.assertIn("const localText = state.conflictLocalText", keep_local_loader)
+        self.assertIn("const requestId = state.keepLocalBufferRequestId + 1", keep_local_loader)
+        self.assertIn("state.keepLocalBufferRequestId = requestId", keep_local_loader)
+        self.assertIn("await loadBootstrap(documentId)", keep_local_loader)
+        self.assertIn("if (!isCurrentKeepLocalBufferRequest(requestId, documentId, localText))", keep_local_loader)
+        self.assertIn("els.editorBuffer.value = localText", keep_local_loader)
+        self.assertIn("function isCurrentKeepLocalBufferRequest(requestId, documentId, localText)", js.text)
+        self.assertIn("state.keepLocalBufferRequestId === requestId", js.text)
+        self.assertIn("state.conflictLocalText === localText", js.text)
+        self.assertIn("function invalidateKeepLocalBufferRequests()", js.text)
+        self.assertIn("state.keepLocalBufferRequestId += 1", js.text)
+        self.assertIn(
+            "invalidateKeepLocalBufferRequests()",
+            js.text.split("els.editorBuffer.addEventListener(\"input\"", 1)[1].split(
+                "els.editorBuffer.addEventListener(\"click\"",
+                1,
+            )[0],
+        )
         history_loader = js.text.split("async function loadHistory()", 1)[1].split(
             "async function loadDiff", 1
         )[0]
@@ -632,6 +654,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateRollbackRequests()", editor_state_setter)
         self.assertIn("invalidateOfflineSyncRequests()", editor_state_setter)
         self.assertIn("invalidatePresenceHeartbeatRequests()", editor_state_setter)
+        self.assertIn("invalidateKeepLocalBufferRequests()", editor_state_setter)
         self.assertIn("invalidateCreateDocumentRequests()", editor_state_setter)
         self.assertIn("invalidateCreateFileImportRequests()", editor_state_setter)
         self.assertIn("invalidateEditorFileImportRequests()", editor_state_setter)
