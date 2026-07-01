@@ -425,6 +425,12 @@ transforms are rejected as `VERSION_CONFLICT` so clients resync transient
 session state; no canonical snapshots or append-only `document_events` are
 changed until a valid `text_session.commit` succeeds.
 
+TASK_139 live-text operation bounds validation also adds no table. Transformed
+`text_session.op` indexes and ranges are checked against the active in-process
+session text before mutation. Invalid bounds return `INVALID_REQUEST` and do
+not advance text revision, append operation history, update canonical
+snapshots, or write `document_events`.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

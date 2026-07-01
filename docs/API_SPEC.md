@@ -177,6 +177,8 @@ See `docs/TASK_137_PLAN.md` for browser live-text unacknowledged-operation
 preservation across WebSocket close/error before acknowledgement.
 See `docs/TASK_138_PLAN.md` for safer stale live-text operation transforms and
 single-operation transform conflict rejection.
+See `docs/TASK_139_PLAN.md` for rejecting out-of-bounds live-text operations
+instead of silently clamping indexes or ranges.
 
 ## Deployment Version
 
@@ -531,6 +533,9 @@ the client should resync from `text_session.state`. The static browser client
 requests a fresh session state after live-text `VERSION_CONFLICT` errors and
 keeps its visible local buffer until it can re-diff against that authoritative
 state.
+After transform, text operation bounds are validated against the active session
+text. Out-of-bounds insert, delete, or replace operations return
+`INVALID_REQUEST` and do not advance the transient text revision.
 
 Offline sync accepts a batch of queued client content-save operations:
 

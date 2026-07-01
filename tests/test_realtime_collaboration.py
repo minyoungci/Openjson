@@ -359,6 +359,60 @@ class RealtimeCollaborationTests(unittest.TestCase):
         loaded = self.client.get(f"/documents/{document['id']}", headers={"X-Actor-Id": self.owner_id})
         self.assertEqual(loaded.json()["content"], {"text": "abcd"})
 
+    def test_out_of_bounds_text_operations_are_rejected_without_advancing_revision(self) -> None:
+        document = create_document(
+            self.db_path,
+            project_id=self.project_id,
+            actor_id=self.owner_id,
+            full_path="config/text-bounds.json",
+            content={"text": "abc"},
+        )
+
+        async def scenario() -> tuple[dict[str, Any], list[AppError], dict[str, Any]]:
+            state = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            invalid_ops = [
+                ("insert", {"type": "insert", "index": len(state["content_text"]) + 10, "text": "X"}),
+                ("delete", {"type": "delete", "index": len(state["content_text"]), "length": 1}),
+                ("replace", {"type": "replace", "index": len(state["content_text"]) - 1, "length": 2, "text": "X"}),
+            ]
+            errors: list[AppError] = []
+            for index, (op_type, op) in enumerate(invalid_ops):
+                try:
+                    await text_collaboration_manager.apply_operation(
+                        self.db_path,
+                        document_id=document["id"],
+                        actor_id=self.owner_id,
+                        message={
+                            "client_id": "owner-client",
+                            "client_operation_id": f"owner-{op_type}-out-of-bounds",
+                            "base_text_revision": state["text_revision"],
+                            "op": op,
+                        },
+                    )
+                except AppError as exc:
+                    errors.append(exc)
+                else:
+                    raise AssertionError(f"Expected out-of-bounds {op_type} rejection at {index}")
+            current = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            return state, errors, current
+
+        before, errors, after = asyncio.run(scenario())
+
+        self.assertEqual([error.code for error in errors], [ErrorCode.INVALID_REQUEST] * 3)
+        self.assertEqual(errors[0].details["reason"], "insert_index_exceeds_text_length")
+        self.assertEqual(errors[1].details["reason"], "operation_range_exceeds_text_length")
+        self.assertEqual(errors[2].details["reason"], "operation_range_exceeds_text_length")
+        self.assertEqual(after["text_revision"], before["text_revision"])
+        self.assertEqual(after["content_text"], before["content_text"])
+
     def test_missing_actor_websocket_gets_structured_error(self) -> None:
         with self.client.websocket_connect(self._ws_path()) as websocket:
             message = websocket.receive_json()

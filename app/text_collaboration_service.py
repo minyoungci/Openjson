@@ -459,14 +459,52 @@ def _raise_text_transform_conflict(
 
 
 def _apply_text_operation(text: str, op: dict[str, Any]) -> str:
-    index = min(op["index"], len(text))
+    _ensure_text_operation_within_bounds(text, op)
+    index = op["index"]
     if op["type"] == "insert":
         return text[:index] + op["text"] + text[index:]
     if op["type"] == "replace":
-        length = min(op["length"], max(0, len(text) - index))
+        length = op["length"]
         return text[:index] + op["text"] + text[index + length :]
-    length = min(op["length"], max(0, len(text) - index))
+    length = op["length"]
     return text[:index] + text[index + length :]
+
+
+def _ensure_text_operation_within_bounds(text: str, op: dict[str, Any]) -> None:
+    text_length = len(text)
+    index = op["index"]
+    if op["type"] == "insert":
+        if index > text_length:
+            _raise_text_operation_bounds_error(
+                op,
+                text_length=text_length,
+                reason="insert_index_exceeds_text_length",
+            )
+        return
+    length = op["length"]
+    if index >= text_length or index + length > text_length:
+        _raise_text_operation_bounds_error(
+            op,
+            text_length=text_length,
+            reason="operation_range_exceeds_text_length",
+        )
+
+
+def _raise_text_operation_bounds_error(
+    op: dict[str, Any],
+    *,
+    text_length: int,
+    reason: str,
+) -> None:
+    raise AppError(
+        ErrorCode.INVALID_REQUEST,
+        "Text operation range is outside the current session text.",
+        {
+            "reason": reason,
+            "op": op,
+            "text_length": text_length,
+        },
+    )
 
 
 text_collaboration_manager = TextCollaborationManager()
