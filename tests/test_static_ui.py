@@ -194,9 +194,11 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("state.zipApplying = false", js.text)
         self.assertIn("state.creatingProject", js.text)
         self.assertIn("state.creatingInvite", js.text)
+        self.assertIn("state.acceptingInvite", js.text)
         self.assertIn("state.creatingDocument", js.text)
         self.assertIn("state.createFileImportRequestId", js.text)
         self.assertIn("state.editorFileImportRequestId", js.text)
+        self.assertIn("state.projectInviteAcceptRequestId", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/members", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/usage", js.text)
         self.assertIn("/auth/signup", js.text)
@@ -529,6 +531,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateCreateFileImportRequests()", bootstrap_loader)
         self.assertIn("invalidateEditorFileImportRequests()", bootstrap_loader)
         self.assertIn("invalidateProjectInviteRequests()", bootstrap_loader)
+        self.assertIn("invalidateProjectInviteAcceptRequests()", bootstrap_loader)
         self.assertIn("/projects/${encodeURIComponent(projectId)}/editor-bootstrap", bootstrap_loader)
         self.assertIn("fetchProjectSchemasSafe(projectId)", bootstrap_loader)
         self.assertIn("fetchProjectMembersSafe(projectId)", bootstrap_loader)
@@ -549,6 +552,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateTeamMembersRequests()", project_home_loader)
         self.assertIn("invalidateCreateDocumentRequests()", project_home_loader)
         self.assertIn("invalidateProjectInviteRequests()", project_home_loader)
+        self.assertIn("invalidateProjectInviteAcceptRequests()", project_home_loader)
         self.assertIn("stopCollaborationLoop()", project_home_loader)
         self.assertIn("stopProjectWorkspaceSocket()", project_home_loader)
         self.assertIn("if (!isCurrentProjectHomeRequest(requestId))", project_home_loader)
@@ -569,6 +573,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateCreateFileImportRequests()", project_opener)
         self.assertIn("invalidateEditorFileImportRequests()", project_opener)
         self.assertIn("invalidateProjectInviteRequests()", project_opener)
+        self.assertIn("invalidateProjectInviteAcceptRequests()", project_opener)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', project_opener)
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", session_clearer)
@@ -582,6 +587,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateCreateFileImportRequests()", session_clearer)
         self.assertIn("invalidateEditorFileImportRequests()", session_clearer)
         self.assertIn("invalidateProjectInviteRequests()", session_clearer)
+        self.assertIn("invalidateProjectInviteAcceptRequests()", session_clearer)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1
@@ -617,6 +623,41 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("els.inviteRole.addEventListener(\"change\"", js.text)
         self.assertIn("els.inviteEmail.disabled = busy || !state.projectId", js.text)
         self.assertIn("els.inviteRole.disabled = busy || !state.projectId", js.text)
+        pending_invite_acceptor = js.text.split("async function acceptPendingInvitation()", 1)[1].split(
+            "async function loadBootstrap", 1
+        )[0]
+        self.assertIn("const sessionUserId = state.userId", pending_invite_acceptor)
+        self.assertIn("const requestId = state.projectInviteAcceptRequestId + 1", pending_invite_acceptor)
+        self.assertIn("state.projectInviteAcceptRequestId = requestId", pending_invite_acceptor)
+        self.assertIn("state.acceptingInvite = true", pending_invite_acceptor)
+        self.assertIn("if (!isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, token, true))", pending_invite_acceptor)
+        manual_invite_acceptor = js.text.split("async function acceptProjectInvite()", 1)[1].split(
+            "async function acceptInvitationToken", 1
+        )[0]
+        self.assertIn("const sessionUserId = state.userId", manual_invite_acceptor)
+        self.assertIn("const tokenText = els.projectInviteToken.value", manual_invite_acceptor)
+        self.assertIn("const requestId = state.projectInviteAcceptRequestId + 1", manual_invite_acceptor)
+        self.assertIn("state.projectInviteAcceptRequestId = requestId", manual_invite_acceptor)
+        self.assertIn("state.acceptingInvite = true", manual_invite_acceptor)
+        self.assertIn("if (!isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, tokenText, false))", manual_invite_acceptor)
+        self.assertIn(
+            "function isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, tokenText, requirePendingToken)",
+            js.text,
+        )
+        self.assertIn("state.projectInviteAcceptRequestId === requestId", js.text)
+        self.assertIn("state.userId === sessionUserId", js.text)
+        self.assertIn("els.projectInviteToken.value === tokenText", js.text)
+        self.assertIn("!requirePendingToken || state.pendingInviteToken === tokenText", js.text)
+        self.assertIn("function invalidateProjectInviteAcceptRequests()", js.text)
+        self.assertIn("state.projectInviteAcceptRequestId += 1", js.text)
+        self.assertIn("state.acceptingInvite = false", js.text)
+        self.assertIn(
+            "invalidateProjectInviteAcceptRequests()",
+            js.text.split("els.projectInviteToken.addEventListener(\"input\"", 1)[1].split(
+                "els.newDocumentButton", 1
+            )[0],
+        )
+        self.assertIn("els.acceptInviteButton.disabled = busy || !els.projectInviteToken.value.trim()", js.text)
         self.assertIn("result.document_id !== state.selectedDocumentId", js.text)
         self.assertIn("createCommentThread", js.text)
         self.assertIn("addCommentReply", js.text)

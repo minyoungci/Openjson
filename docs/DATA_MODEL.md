@@ -583,6 +583,12 @@ user, project, email, and role context before applying invite tokens, links, or
 delivery statuses. This does not alter invitation transactions, email delivery,
 memberships, permissions, canonical snapshots, or append-only
 `document_events`.
+TASK_172 stale project invitation acceptance guarding also adds no table. The
+static browser client tracks invite-accept request ids and captured session
+user plus invite-token context before opening joined projects, clearing tokens,
+or showing join status. This does not alter invitation transactions, token
+hashing, memberships, permissions, canonical snapshots, or append-only
+`document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

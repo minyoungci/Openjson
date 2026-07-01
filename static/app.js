@@ -133,6 +133,7 @@
     memberListError: null,
     teamMembersRequestId: 0,
     projectInviteRequestId: 0,
+    projectInviteAcceptRequestId: 0,
     projectUsage: null,
     projectUsageError: null,
     commentThreads: [],
@@ -180,6 +181,7 @@
     rollingBack: false,
     creatingProject: false,
     creatingInvite: false,
+    acceptingInvite: false,
     autosaving: false,
     conflictLocalText: "",
     originalText: "",
@@ -354,6 +356,7 @@
     });
 
     els.projectInviteToken.addEventListener("input", () => {
+      invalidateProjectInviteAcceptRequests();
       syncButtons();
     });
 
@@ -576,6 +579,7 @@
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
+    invalidateProjectInviteAcceptRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
@@ -710,6 +714,7 @@
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
+    invalidateProjectInviteAcceptRequests();
     resetZipImportSelection("No ZIP selected.");
     setProjectId(projectId);
     if (!selectedDocumentId) {
@@ -908,6 +913,7 @@
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
+    invalidateProjectInviteAcceptRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
@@ -947,21 +953,42 @@
       await loadProjectHome();
       return;
     }
+    const sessionUserId = state.userId;
+    if (!sessionUserId || state.acceptingInvite) {
+      return;
+    }
+    const requestId = state.projectInviteAcceptRequestId + 1;
+    state.projectInviteAcceptRequestId = requestId;
+    state.acceptingInvite = true;
     state.pendingInviteToken = token;
     els.projectInviteToken.value = token;
     showProjectScreen("Joining invited project...");
+    syncButtons();
+    let result;
     try {
-      const result = await acceptInvitationToken(token);
-      state.pendingInviteToken = "";
-      els.projectInviteToken.value = "";
-      renderText(els.projectSetupOutput, `Joined project as ${result.member.role}.`, "ok-text");
-      await openProject(result.invitation.project_id, null);
+      result = await acceptInvitationToken(token);
     } catch (error) {
+      if (!isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, token, true)) {
+        return;
+      }
       showProjectScreen();
       clearPanel(els.projectList, "Invite token is ready for manual retry.");
       renderError(els.projectSetupOutput, error);
       syncButtons();
+      return;
+    } finally {
+      if (state.projectInviteAcceptRequestId === requestId) {
+        state.acceptingInvite = false;
+        syncButtons();
+      }
     }
+    if (!isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, token, true)) {
+      return;
+    }
+    state.pendingInviteToken = "";
+    els.projectInviteToken.value = "";
+    renderText(els.projectSetupOutput, `Joined project as ${result.member.role}.`, "ok-text");
+    await openProject(result.invitation.project_id, null);
   }
 
   async function loadBootstrap(selectedDocumentId) {
@@ -975,6 +1002,7 @@
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
+    invalidateProjectInviteAcceptRequests();
     state.loading = true;
     syncButtons();
     const params = {
@@ -1238,16 +1266,60 @@
   }
 
   async function acceptProjectInvite() {
-    const token = els.projectInviteToken.value.trim();
+    const sessionUserId = state.userId;
+    const tokenText = els.projectInviteToken.value;
+    const token = tokenText.trim();
     if (!token) {
       renderText(els.projectSetupOutput, "Invite token is required.", "error-text");
       return;
     }
-    const result = await acceptInvitationToken(token);
+    if (!sessionUserId) {
+      renderText(els.projectSetupOutput, "Sign up or log in before joining an invited project.", "error-text");
+      return;
+    }
+    if (state.acceptingInvite) {
+      return;
+    }
+    const requestId = state.projectInviteAcceptRequestId + 1;
+    state.projectInviteAcceptRequestId = requestId;
+    state.acceptingInvite = true;
+    syncButtons();
+    let result;
+    try {
+      result = await acceptInvitationToken(token);
+    } catch (error) {
+      if (!isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, tokenText, false)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.projectInviteAcceptRequestId === requestId) {
+        state.acceptingInvite = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, tokenText, false)) {
+      return;
+    }
     state.pendingInviteToken = "";
     renderText(els.projectSetupOutput, `Joined project as ${result.member.role}.`, "ok-text");
     els.projectInviteToken.value = "";
     await openProject(result.invitation.project_id, null);
+  }
+
+  function isCurrentProjectInviteAcceptRequest(requestId, sessionUserId, tokenText, requirePendingToken) {
+    return (
+      state.projectInviteAcceptRequestId === requestId &&
+      state.userId === sessionUserId &&
+      els.projectInviteToken.value === tokenText &&
+      (!requirePendingToken || state.pendingInviteToken === tokenText)
+    );
+  }
+
+  function invalidateProjectInviteAcceptRequests() {
+    state.projectInviteAcceptRequestId += 1;
+    state.acceptingInvite = false;
+    syncButtons();
   }
 
   async function acceptInvitationToken(token) {
@@ -3216,6 +3288,7 @@
       state.rollingBack ||
       state.creatingProject ||
       state.creatingInvite ||
+      state.acceptingInvite ||
       state.creatingDocument ||
       state.zipPreviewing ||
       state.zipApplying ||

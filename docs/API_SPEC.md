@@ -250,6 +250,9 @@ create-form changes.
 See `docs/TASK_171_PLAN.md` for guarding stale browser project-invitation
 responses after session changes, project navigation, project reloads, or
 invite-form changes.
+See `docs/TASK_172_PLAN.md` for guarding stale browser invitation-acceptance
+responses after session changes, token edits, project navigation, or project
+reloads.
 
 ## Deployment Version
 
@@ -725,6 +728,13 @@ loading, project opening, project bootstrap reloads, session clearing, or
 editing the invite form invalidates outstanding invite creates, and stale
 successes or failures are ignored instead of rendering invite tokens, invite
 links, or email delivery status into the current team panel.
+Invitation-acceptance responses in the static browser are applied only when
+they still match the latest invite-accept request, captured session user id,
+pending invite token state, and invite token input. Project-home loading,
+project opening, project bootstrap reloads, session clearing, or editing the
+invite token invalidates outstanding invite accepts, and stale successes or
+failures are ignored instead of opening projects, clearing tokens, or rendering
+join status into the current project setup panel.
 Project-creation responses in the static browser are applied only when they
 still match the latest create request, captured actor id, visible create panel,
 workspace name input, project name input, and project description input.
