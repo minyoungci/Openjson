@@ -165,6 +165,8 @@ See `docs/TASK_131_PLAN.md` for WebSocket collaborative text-session write
 permission hardening.
 See `docs/TASK_132_PLAN.md` for idempotent WebSocket collaborative text
 operations.
+See `docs/TASK_133_PLAN.md` for browser live-text pending-operation ack
+ordering.
 
 ## Deployment Version
 
@@ -490,6 +492,10 @@ WebSocket message limit. Limited connections receive a structured
 the same `(actor_id, client_operation_id)` in the active text session return
 the original `text_session.op.accepted` payload with `idempotent_replay = true`
 and are not re-broadcast to other sockets.
+The static browser client keeps at most one unacknowledged local
+`text_session.op` in flight. Additional local keystrokes remain in the editor
+buffer and are diffed again after the server acknowledgement, so later
+operations use the acknowledged `base_text_revision`.
 
 Offline sync accepts a batch of queued client content-save operations:
 

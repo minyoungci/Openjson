@@ -383,6 +383,12 @@ session operation list and prevent duplicate `text_session.op` messages from
 mutating shared text twice. Durable JSON history remains only the accepted
 `document_events` row created by `text_session.commit`.
 
+TASK_133 browser live-text acknowledgement ordering also adds no table. The
+static browser UI tracks one pending local `text_session.op` in memory, waits
+for `text_session.op.accepted`, and then re-diffs the editor buffer before
+sending another operation. This is client-owned transient state and does not
+change canonical snapshots or append-only document events.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

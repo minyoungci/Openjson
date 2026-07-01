@@ -142,6 +142,7 @@
     liveTextRevision: 0,
     liveTextShadow: "",
     liveTextApplyingRemote: false,
+    liveTextPendingOperation: false,
     liveTextClientId: localStorage.getItem("openjson.liveTextClientId") || "",
     offlineQueue: readOfflineQueue(),
     autosaving: false,
@@ -1743,6 +1744,7 @@
       if (payload.type === "collaboration_state" && payload.state) {
         applyCollaborationState(payload.state).catch((error) => renderError(els.collaborationPanel, error));
       } else if (payload.type === "error" && payload.error) {
+        state.liveTextPendingOperation = false;
         renderErrorObject(els.collaborationPanel, payload.error);
       } else if (payload.type === "text_session.state") {
         applyLiveTextState(payload);
@@ -1760,6 +1762,7 @@
       }
       state.collaborationSocket = null;
       state.collaborationTransport = "polling";
+      state.liveTextPendingOperation = false;
       if (state.collaborationStopped || state.selectedDocumentId !== documentId) {
         return;
       }
@@ -1770,6 +1773,7 @@
 
     socket.addEventListener("error", () => {
       state.collaborationTransport = "polling";
+      state.liveTextPendingOperation = false;
     });
   }
 
@@ -1801,6 +1805,15 @@
     if (!state.liveTextEnabled || !state.selectedDocumentId) {
       return;
     }
+    if (state.liveTextPendingOperation) {
+      setEditorStatus("Live text change is still syncing.", "info");
+      return;
+    }
+    if (state.liveTextShadow !== els.editorBuffer.value) {
+      handleLiveTextInput();
+      setEditorStatus("Syncing latest live text before commit.", "info");
+      return;
+    }
     const sent = sendRealtimeMessage({
       type: "text_session.commit",
       text_revision: state.liveTextRevision,
@@ -1815,6 +1828,7 @@
   function applyLiveTextState(payload) {
     state.liveTextRevision = payload.text_revision || 0;
     state.liveTextShadow = payload.content_text || "";
+    state.liveTextPendingOperation = false;
     state.liveTextApplyingRemote = true;
     els.editorBuffer.value = state.liveTextShadow;
     state.liveTextApplyingRemote = false;
@@ -1826,8 +1840,9 @@
     if (payload.document_id !== state.selectedDocumentId || !payload.op) {
       return;
     }
-    state.liveTextRevision = payload.server_text_revision || state.liveTextRevision;
+    state.liveTextRevision = Math.max(state.liveTextRevision, payload.server_text_revision || 0);
     if (payload.idempotent_replay || payload.client_id === state.liveTextClientId) {
+      finishLocalLiveTextOperation();
       return;
     }
     state.liveTextShadow = applyTextOperation(state.liveTextShadow, payload.op);
@@ -1837,8 +1852,18 @@
     updateSyntaxState();
   }
 
+  function finishLocalLiveTextOperation() {
+    state.liveTextPendingOperation = false;
+    if (state.liveTextEnabled && state.liveTextShadow !== els.editorBuffer.value) {
+      window.setTimeout(() => handleLiveTextInput(), 0);
+    }
+  }
+
   function handleLiveTextInput() {
     if (!state.liveTextEnabled || state.liveTextApplyingRemote || !state.selectedDocumentId) {
+      return;
+    }
+    if (state.liveTextPendingOperation) {
       return;
     }
     const op = diffTextOperation(state.liveTextShadow, els.editorBuffer.value);
@@ -1853,6 +1878,7 @@
       op,
     });
     if (sent) {
+      state.liveTextPendingOperation = true;
       state.liveTextShadow = els.editorBuffer.value;
     }
   }
