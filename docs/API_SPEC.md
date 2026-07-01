@@ -238,6 +238,9 @@ and success statuses after document switches.
 See `docs/TASK_167_PLAN.md` for guarding stale browser ZIP import preview/apply
 responses after project switches, ZIP file changes, selected-document changes,
 or overlapping ZIP import actions.
+See `docs/TASK_168_PLAN.md` for guarding stale browser document-create
+responses after project switches, document switches, create-panel closes, or
+create-form changes.
 
 ## Deployment Version
 
@@ -711,6 +714,11 @@ only when the response still belongs to the latest project-home request. Opening
 a project, starting project creation, or clearing session state invalidates
 outstanding project-home loads, and stale failures are ignored instead of
 rendering into the current screen.
+Create-document responses in the static browser are applied only when they
+still match the latest create request, captured project id, selected document
+id, visible create panel, candidate `full_path`, content text, and schema
+selection. Stale create successes and stale create failures are ignored instead
+of clearing the current form or loading a document into the wrong project.
 Document auxiliary panel responses in the static browser are applied only when
 they still match the latest request for the selected document and the captured
 version or editor-buffer inputs. This applies to validation, content preview,

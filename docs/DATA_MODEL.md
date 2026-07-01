@@ -560,6 +560,11 @@ project id, candidate `full_path`, visible create panel, and automatic schema
 mode. This is client-only preview state and does not affect schema rows,
 document creation, canonical snapshots, append-only `document_events`, or
 WebSocket server state.
+TASK_168 stale document create response guarding also adds no table. The static
+browser client tracks create-document request ids and captured project,
+selected-document, path, content, schema, and panel visibility context before
+applying create results or failures. This does not alter document create
+transactions or append-only `document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

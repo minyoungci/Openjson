@@ -165,6 +165,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function resetZipImportSelection(message)", js.text)
         self.assertIn("state.zipPreviewing = false", js.text)
         self.assertIn("state.zipApplying = false", js.text)
+        self.assertIn("state.creatingDocument", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/members", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/usage", js.text)
         self.assertIn("/auth/signup", js.text)
@@ -197,6 +198,38 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function isCurrentSchemaMatchRequest(requestId, projectId, fullPath)", js.text)
         self.assertIn("state.schemaMatchRequestId === requestId", js.text)
         self.assertIn("cleanOptional(els.newPath.value) === fullPath", js.text)
+        document_creator = js.text.split("async function createDocument()", 1)[1].split(
+            "async function importCreateFile", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", document_creator)
+        self.assertIn("const selectedDocumentId = state.selectedDocumentId || \"\"", document_creator)
+        self.assertIn("const contentText = els.newContent.value", document_creator)
+        self.assertIn("const requestId = state.createDocumentRequestId + 1", document_creator)
+        self.assertIn("state.createDocumentRequestId = requestId", document_creator)
+        self.assertIn("state.creatingDocument = true", document_creator)
+        self.assertIn("/projects/${encodeURIComponent(projectId)}/documents", document_creator)
+        self.assertIn(
+            "if (!isCurrentCreateDocumentRequest(requestId, projectId, selectedDocumentId, fullPath, contentText, schemaId))",
+            document_creator,
+        )
+        self.assertIn(
+            "function isCurrentCreateDocumentRequest(requestId, projectId, selectedDocumentId, fullPath, contentText, schemaId)",
+            js.text,
+        )
+        self.assertIn("state.createDocumentRequestId === requestId", js.text)
+        self.assertIn("(state.selectedDocumentId || \"\") === selectedDocumentId", js.text)
+        self.assertIn("els.newContent.value === contentText", js.text)
+        self.assertIn("cleanOptional(els.schemaSelect.value) === schemaId", js.text)
+        self.assertIn("!els.createPanel.classList.contains(\"hidden\")", js.text)
+        self.assertIn("function invalidateCreateDocumentRequests()", js.text)
+        self.assertIn("state.createDocumentRequestId += 1", js.text)
+        self.assertIn("state.creatingDocument = false", js.text)
+        self.assertIn("syncButtons()", js.text.split("function invalidateCreateDocumentRequests()", 1)[1])
+        self.assertIn("els.newContent.addEventListener(\"input\"", js.text)
+        create_form_import = js.text.split("async function importCreateFile()", 1)[1].split(
+            "async function importEditorFile", 1
+        )[0]
+        self.assertIn("invalidateCreateDocumentRequests()", create_form_import)
         self.assertIn("SCHEMA_VALIDATION_FAILED", js.text)
         self.assertIn("renderSchemaValidationFailure", js.text)
         self.assertIn("renderZipImportResult", js.text)
@@ -371,11 +404,13 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function invalidateSaveRequests()", js.text)
         self.assertIn("state.saveRequestId += 1", js.text)
         self.assertIn("state.saving = false", js.text)
-        self.assertIn("state.zipPreviewing || state.zipApplying", js.text)
+        self.assertIn("state.zipPreviewing", js.text)
+        self.assertIn("state.zipApplying", js.text)
         editor_state_setter = js.text.split("function setSelectedEditorState", 1)[1].split("function clearEditor", 1)[0]
         self.assertIn("state.selectedDocumentId !== editorState.document.id", editor_state_setter)
         self.assertIn("invalidateSaveRequests()", editor_state_setter)
         self.assertIn("invalidateRollbackRequests()", editor_state_setter)
+        self.assertIn("invalidateCreateDocumentRequests()", editor_state_setter)
         self.assertIn("loadCommentThreads", js.text)
         self.assertIn("comment_threads.updated", js.text)
         self.assertIn("applyCommentThreadsUpdated", js.text)
@@ -445,6 +480,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("state.projectHomeRequestId = requestId", project_home_loader)
         self.assertIn("invalidateBootstrapRequests()", project_home_loader)
         self.assertIn("invalidateTeamMembersRequests()", project_home_loader)
+        self.assertIn("invalidateCreateDocumentRequests()", project_home_loader)
         self.assertIn("stopCollaborationLoop()", project_home_loader)
         self.assertIn("stopProjectWorkspaceSocket()", project_home_loader)
         self.assertIn("if (!isCurrentProjectHomeRequest(requestId))", project_home_loader)
@@ -458,6 +494,7 @@ class StaticUiTests(unittest.TestCase):
         project_opener = js.text.split("async function openProject", 1)[1].split("function setProjectId", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", project_opener)
         self.assertIn("invalidateProjectDocumentsChangeRequests()", project_opener)
+        self.assertIn("invalidateCreateDocumentRequests()", project_opener)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', project_opener)
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", session_clearer)
@@ -466,6 +503,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateSaveRequests()", session_clearer)
         self.assertIn("invalidateRollbackRequests()", session_clearer)
         self.assertIn("invalidateProjectDocumentsChangeRequests()", session_clearer)
+        self.assertIn("invalidateCreateDocumentRequests()", session_clearer)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1

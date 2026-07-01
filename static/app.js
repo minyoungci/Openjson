@@ -138,6 +138,8 @@
     createSchemaMatch: null,
     schemaMatchTimer: null,
     schemaMatchRequestId: 0,
+    createDocumentRequestId: 0,
+    creatingDocument: false,
     zipFile: null,
     zipPreview: null,
     zipPreviewRequestId: 0,
@@ -327,20 +329,30 @@
       if (!els.createPanel.classList.contains("hidden")) {
         renderSchemaOptions();
         scheduleSchemaMatchPreview();
+      } else {
+        invalidateCreateDocumentRequests();
       }
     });
 
     els.cancelCreateButton.addEventListener("click", () => {
       els.createPanel.classList.add("hidden");
+      invalidateCreateDocumentRequests();
     });
 
     els.newPath.addEventListener("input", () => {
+      invalidateCreateDocumentRequests();
       scheduleSchemaMatchPreview();
       syncButtons();
     });
 
     els.schemaSelect.addEventListener("change", () => {
+      invalidateCreateDocumentRequests();
       previewCreateSchemaMatch().catch((error) => renderError(els.schemaMatchPanel, error));
+      syncButtons();
+    });
+
+    els.newContent.addEventListener("input", () => {
+      invalidateCreateDocumentRequests();
       syncButtons();
     });
 
@@ -520,6 +532,7 @@
     state.projectHomeRequestId = requestId;
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
+    invalidateCreateDocumentRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
@@ -612,6 +625,7 @@
   async function openProject(projectId, selectedDocumentId) {
     invalidateProjectHomeRequests();
     invalidateProjectDocumentsChangeRequests();
+    invalidateCreateDocumentRequests();
     resetZipImportSelection("No ZIP selected.");
     setProjectId(projectId);
     if (!selectedDocumentId) {
@@ -805,6 +819,7 @@
     invalidateProjectHomeRequests();
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
+    invalidateCreateDocumentRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
@@ -1268,6 +1283,7 @@
     if (state.selectedDocumentId && state.selectedDocumentId !== editorState.document.id) {
       invalidateSaveRequests();
       invalidateRollbackRequests();
+      invalidateCreateDocumentRequests();
     }
     state.selectedEditorState = editorState;
     state.selectedDocumentId = editorState.document.id;
@@ -1312,6 +1328,7 @@
     invalidateSaveRequests();
     invalidateRollbackRequests();
     invalidateProjectDocumentsChangeRequests();
+    invalidateCreateDocumentRequests();
     state.originalText = "";
     state.liveTextShadow = "";
     state.liveTextRevision = 0;
@@ -1339,14 +1356,17 @@
   }
 
   async function createDocument() {
+    const projectId = state.projectId;
+    const selectedDocumentId = state.selectedDocumentId || "";
     const fullPath = els.newPath.value.trim();
-    if (!fullPath) {
+    const contentText = els.newContent.value;
+    if (!projectId || !fullPath || state.creatingDocument) {
       setEditorStatus("Document path is required.", "error");
       return;
     }
     let content;
     try {
-      content = JSON.parse(els.newContent.value);
+      content = JSON.parse(contentText);
     } catch (error) {
       renderText(els.validationPanel, `Invalid JSON: ${error.message}`, "error-text");
       return;
@@ -1356,10 +1376,30 @@
     if (schemaId) {
       body.schema_id = schemaId;
     }
-    const created = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/documents`, {
-      method: "POST",
-      body,
-    });
+    const requestId = state.createDocumentRequestId + 1;
+    state.createDocumentRequestId = requestId;
+    state.creatingDocument = true;
+    syncButtons();
+    let created;
+    try {
+      created = await apiFetch(`/projects/${encodeURIComponent(projectId)}/documents`, {
+        method: "POST",
+        body,
+      });
+    } catch (error) {
+      if (!isCurrentCreateDocumentRequest(requestId, projectId, selectedDocumentId, fullPath, contentText, schemaId)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.createDocumentRequestId === requestId) {
+        state.creatingDocument = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentCreateDocumentRequest(requestId, projectId, selectedDocumentId, fullPath, contentText, schemaId)) {
+      return;
+    }
     els.createPanel.classList.add("hidden");
     els.newPath.value = "";
     els.schemaSelect.value = "";
@@ -1368,12 +1408,31 @@
     await loadBootstrap(created.id);
   }
 
+  function isCurrentCreateDocumentRequest(requestId, projectId, selectedDocumentId, fullPath, contentText, schemaId) {
+    return (
+      state.createDocumentRequestId === requestId &&
+      state.projectId === projectId &&
+      (state.selectedDocumentId || "") === selectedDocumentId &&
+      cleanOptional(els.newPath.value) === fullPath &&
+      els.newContent.value === contentText &&
+      cleanOptional(els.schemaSelect.value) === schemaId &&
+      !els.createPanel.classList.contains("hidden")
+    );
+  }
+
+  function invalidateCreateDocumentRequests() {
+    state.createDocumentRequestId += 1;
+    state.creatingDocument = false;
+    syncButtons();
+  }
+
   async function importCreateFile() {
     const file = els.createFileInput.files && els.createFileInput.files[0];
     if (!file) {
       return;
     }
     const text = await readJsonFile(file);
+    invalidateCreateDocumentRequests();
     els.newContent.value = prettyJsonText(text);
     if (!els.newPath.value.trim()) {
       els.newPath.value = suggestedJsonPath(file.name);
@@ -2939,7 +2998,13 @@
       state.createSchemaMatch.resolution.status === "ambiguous" &&
       !cleanOptional(els.schemaSelect.value);
     const busy =
-      state.loading || state.saving || state.rollingBack || state.zipPreviewing || state.zipApplying || state.autosaving;
+      state.loading ||
+      state.saving ||
+      state.rollingBack ||
+      state.creatingDocument ||
+      state.zipPreviewing ||
+      state.zipApplying ||
+      state.autosaving;
     els.signupButton.disabled = busy;
     els.loginButton.disabled = busy;
     els.logoutButton.disabled = busy || !state.token;
