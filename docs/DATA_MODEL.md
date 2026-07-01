@@ -499,6 +499,12 @@ matches. Newer HTTP or WebSocket heartbeats for the same `(document_id,
 actor_id)` row are preserved, so reconnect races do not incorrectly remove an
 active user from collaboration monitoring.
 
+TASK_151 stale collaboration-state payload handling also adds no table. The
+static browser client ignores `collaboration_state` payloads whose
+`document_id` no longer matches the selected document. This is client-owned
+operational state only and does not affect `editor_presence`, canonical
+snapshots, or append-only `document_events`.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

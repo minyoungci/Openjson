@@ -206,6 +206,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("applyProjectDocumentsChanged", js.text)
         self.assertIn("Project documents changed. Save or reload", js.text)
         self.assertIn("Project documents updated.", js.text)
+        self.assertIn("result.document_id !== state.selectedDocumentId", js.text)
         self.assertIn("createCommentThread", js.text)
         self.assertIn("addCommentReply", js.text)
         self.assertIn("setCommentThreadStatus", js.text)

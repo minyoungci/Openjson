@@ -199,6 +199,8 @@ See `docs/TASK_149_PLAN.md` for HTTP presence heartbeat and leave broadcasts
 over the document WebSocket channel.
 See `docs/TASK_150_PLAN.md` for guarding stale WebSocket disconnect leave
 against newer presence heartbeats.
+See `docs/TASK_151_PLAN.md` for ignoring stale browser collaboration-state
+payloads after document switches.
 
 ## Deployment Version
 
@@ -514,6 +516,10 @@ Successful HTTP presence heartbeat and leave calls also broadcast a fresh
 `collaboration_state` to active WebSocket clients for that document, so
 browser polling fallback updates and explicit leaves are visible to peers
 without waiting for the next manual refresh or timeout.
+The static browser client applies a `collaboration_state` payload only when its
+`document_id` still matches the currently selected document, so late polling or
+WebSocket messages from a previous document cannot overwrite the active
+collaboration panel.
 Accepted HTTP document mutations that leave the document active,
 including `PATCH /documents/{id}`, `PUT /documents/{id}/content`, and
 `POST /documents/{id}/rollback`, broadcast a fresh `collaboration_state` to

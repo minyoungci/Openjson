@@ -2332,6 +2332,9 @@
   }
 
   async function applyCollaborationState(result) {
+    if (!result || result.document_id !== state.selectedDocumentId) {
+      return;
+    }
     renderCollaboration(result);
     if (result.current_version > state.currentVersion) {
       if (state.dirty) {
