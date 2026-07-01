@@ -241,6 +241,9 @@ or overlapping ZIP import actions.
 See `docs/TASK_168_PLAN.md` for guarding stale browser document-create
 responses after project switches, document switches, create-panel closes, or
 create-form changes.
+See `docs/TASK_169_PLAN.md` for guarding stale browser JSON file import
+results after project switches, document switches, create-panel closes, reloads,
+or target form/buffer changes.
 
 ## Deployment Version
 
@@ -719,6 +722,14 @@ still match the latest create request, captured project id, selected document
 id, visible create panel, candidate `full_path`, content text, and schema
 selection. Stale create successes and stale create failures are ignored instead
 of clearing the current form or loading a document into the wrong project.
+JSON file import results in the static browser are applied only when they still
+match the latest file import request and captured target context. Create-form
+imports require the same project, selected document, visible create panel,
+selected file, path text, content text, and schema selection. Editor imports
+require the same selected document, current version, selected file, and editor
+buffer text. Stale file-read successes and stale JSON-parse failures are
+ignored instead of overwriting the active form or rendering errors into the
+wrong validation panel.
 Document auxiliary panel responses in the static browser are applied only when
 they still match the latest request for the selected document and the captured
 version or editor-buffer inputs. This applies to validation, content preview,

@@ -565,6 +565,12 @@ browser client tracks create-document request ids and captured project,
 selected-document, path, content, schema, and panel visibility context before
 applying create results or failures. This does not alter document create
 transactions or append-only `document_events`.
+TASK_169 stale JSON file import guarding also adds no table. The static browser
+client tracks create-form and editor-buffer file import request ids plus the
+captured target project, document, file, form, version, and buffer context
+before applying local file-read results or parse failures. This does not alter
+JSON syntax validation, document create/save transactions, canonical snapshots,
+or append-only `document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

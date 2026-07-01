@@ -139,6 +139,8 @@
     schemaMatchTimer: null,
     schemaMatchRequestId: 0,
     createDocumentRequestId: 0,
+    createFileImportRequestId: 0,
+    editorFileImportRequestId: 0,
     creatingDocument: false,
     zipFile: null,
     zipPreview: null,
@@ -331,28 +333,33 @@
         scheduleSchemaMatchPreview();
       } else {
         invalidateCreateDocumentRequests();
+        invalidateCreateFileImportRequests();
       }
     });
 
     els.cancelCreateButton.addEventListener("click", () => {
       els.createPanel.classList.add("hidden");
       invalidateCreateDocumentRequests();
+      invalidateCreateFileImportRequests();
     });
 
     els.newPath.addEventListener("input", () => {
       invalidateCreateDocumentRequests();
+      invalidateCreateFileImportRequests();
       scheduleSchemaMatchPreview();
       syncButtons();
     });
 
     els.schemaSelect.addEventListener("change", () => {
       invalidateCreateDocumentRequests();
+      invalidateCreateFileImportRequests();
       previewCreateSchemaMatch().catch((error) => renderError(els.schemaMatchPanel, error));
       syncButtons();
     });
 
     els.newContent.addEventListener("input", () => {
       invalidateCreateDocumentRequests();
+      invalidateCreateFileImportRequests();
       syncButtons();
     });
 
@@ -369,6 +376,7 @@
     });
 
     els.editorBuffer.addEventListener("input", () => {
+      invalidateEditorFileImportRequests();
       handleLiveTextInput();
       updateSyntaxState();
       schedulePresenceCursorUpdate();
@@ -533,6 +541,8 @@
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
+    invalidateCreateFileImportRequests();
+    invalidateEditorFileImportRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
@@ -626,6 +636,8 @@
     invalidateProjectHomeRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
+    invalidateCreateFileImportRequests();
+    invalidateEditorFileImportRequests();
     resetZipImportSelection("No ZIP selected.");
     setProjectId(projectId);
     if (!selectedDocumentId) {
@@ -820,6 +832,8 @@
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
+    invalidateCreateFileImportRequests();
+    invalidateEditorFileImportRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
@@ -884,6 +898,8 @@
     const projectId = state.projectId;
     const requestId = state.bootstrapRequestId + 1;
     state.bootstrapRequestId = requestId;
+    invalidateCreateFileImportRequests();
+    invalidateEditorFileImportRequests();
     state.loading = true;
     syncButtons();
     const params = {
@@ -1284,6 +1300,8 @@
       invalidateSaveRequests();
       invalidateRollbackRequests();
       invalidateCreateDocumentRequests();
+      invalidateCreateFileImportRequests();
+      invalidateEditorFileImportRequests();
     }
     state.selectedEditorState = editorState;
     state.selectedDocumentId = editorState.document.id;
@@ -1329,6 +1347,8 @@
     invalidateRollbackRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
+    invalidateCreateFileImportRequests();
+    invalidateEditorFileImportRequests();
     state.originalText = "";
     state.liveTextShadow = "";
     state.liveTextRevision = 0;
@@ -1426,12 +1446,71 @@
     syncButtons();
   }
 
+  function isCurrentCreateFileImportRequest(
+    requestId,
+    projectId,
+    selectedDocumentId,
+    file,
+    pathText,
+    contentText,
+    schemaId,
+  ) {
+    const selectedFile = els.createFileInput.files && els.createFileInput.files[0];
+    return (
+      state.createFileImportRequestId === requestId &&
+      state.projectId === projectId &&
+      (state.selectedDocumentId || "") === selectedDocumentId &&
+      selectedFile === file &&
+      els.newPath.value === pathText &&
+      els.newContent.value === contentText &&
+      cleanOptional(els.schemaSelect.value) === schemaId &&
+      !els.createPanel.classList.contains("hidden")
+    );
+  }
+
+  function invalidateCreateFileImportRequests() {
+    state.createFileImportRequestId += 1;
+  }
+
+  function isCurrentEditorFileImportRequest(requestId, documentId, currentVersion, contentText, file) {
+    const selectedFile = els.editorFileInput.files && els.editorFileInput.files[0];
+    return (
+      state.editorFileImportRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.currentVersion === currentVersion &&
+      els.editorBuffer.value === contentText &&
+      selectedFile === file
+    );
+  }
+
+  function invalidateEditorFileImportRequests() {
+    state.editorFileImportRequestId += 1;
+  }
+
   async function importCreateFile() {
     const file = els.createFileInput.files && els.createFileInput.files[0];
     if (!file) {
       return;
     }
-    const text = await readJsonFile(file);
+    const projectId = state.projectId;
+    const selectedDocumentId = state.selectedDocumentId || "";
+    const pathText = els.newPath.value;
+    const contentText = els.newContent.value;
+    const schemaId = cleanOptional(els.schemaSelect.value);
+    const requestId = state.createFileImportRequestId + 1;
+    state.createFileImportRequestId = requestId;
+    let text;
+    try {
+      text = await readJsonFile(file);
+    } catch (error) {
+      if (!isCurrentCreateFileImportRequest(requestId, projectId, selectedDocumentId, file, pathText, contentText, schemaId)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentCreateFileImportRequest(requestId, projectId, selectedDocumentId, file, pathText, contentText, schemaId)) {
+      return;
+    }
     invalidateCreateDocumentRequests();
     els.newContent.value = prettyJsonText(text);
     if (!els.newPath.value.trim()) {
@@ -1450,7 +1529,23 @@
     if (!state.selectedDocumentId) {
       throw new Error("Select a document before importing into the editor.");
     }
-    const text = await readJsonFile(file);
+    const documentId = state.selectedDocumentId;
+    const currentVersion = state.currentVersion;
+    const contentText = els.editorBuffer.value;
+    const requestId = state.editorFileImportRequestId + 1;
+    state.editorFileImportRequestId = requestId;
+    let text;
+    try {
+      text = await readJsonFile(file);
+    } catch (error) {
+      if (!isCurrentEditorFileImportRequest(requestId, documentId, currentVersion, contentText, file)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentEditorFileImportRequest(requestId, documentId, currentVersion, contentText, file)) {
+      return;
+    }
     els.editorBuffer.value = prettyJsonText(text);
     els.editorFileInput.value = "";
     updateSyntaxState();
@@ -1772,6 +1867,7 @@
     }
     const documentId = state.selectedDocumentId;
     const localText = state.conflictLocalText;
+    invalidateEditorFileImportRequests();
     await loadBootstrap(documentId);
     els.editorBuffer.value = localText;
     updateSyntaxState();
