@@ -253,6 +253,9 @@ invite-form changes.
 See `docs/TASK_172_PLAN.md` for guarding stale browser invitation-acceptance
 responses after session changes, token edits, project navigation, or project
 reloads.
+See `docs/TASK_173_PLAN.md` for guarding stale browser signup, login, logout,
+and refresh-token responses after overlapping account transitions, auth form
+changes, or session clearing.
 
 ## Deployment Version
 
@@ -735,6 +738,14 @@ project opening, project bootstrap reloads, session clearing, or editing the
 invite token invalidates outstanding invite accepts, and stale successes or
 failures are ignored instead of opening projects, clearing tokens, or rendering
 join status into the current project setup panel.
+Authentication responses in the static browser are applied only when they still
+match the latest relevant account-transition request. Signup and login
+responses must match the captured auth form context and pending invite token.
+Logout responses must match the captured session user id and session token.
+Refresh-token responses must match the captured refresh token before rotating
+the browser session. Auth form edits and session clearing invalidate
+outstanding account-transition requests, and stale successes or failures are
+ignored instead of applying sessions or rendering stale account status.
 Project-creation responses in the static browser are applied only when they
 still match the latest create request, captured actor id, visible create panel,
 workspace name input, project name input, and project description input.

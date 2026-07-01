@@ -589,6 +589,12 @@ user plus invite-token context before opening joined projects, clearing tokens,
 or showing join status. This does not alter invitation transactions, token
 hashing, memberships, permissions, canonical snapshots, or append-only
 `document_events`.
+TASK_173 stale browser authentication response guarding also adds no table. The
+static browser client tracks account-transition request ids and captured form
+or token context before applying signup, login, logout, or refresh-token
+responses. This does not alter session-token hashing, refresh-token rotation
+storage, permissions, memberships, canonical snapshots, or append-only
+`document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

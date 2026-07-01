@@ -137,6 +137,57 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("els.workspaceName.addEventListener(\"input\"", js.text)
         self.assertIn("els.projectName.addEventListener(\"input\"", js.text)
         self.assertIn("els.projectDescription.addEventListener(\"input\"", js.text)
+        signup_loader = js.text.split("async function signupWithPassword()", 1)[1].split(
+            "async function loginWithPassword", 1
+        )[0]
+        self.assertIn("const displayNameText = els.authName.value", signup_loader)
+        self.assertIn("const emailText = els.authEmail.value", signup_loader)
+        self.assertIn("const pendingInviteToken = state.pendingInviteToken", signup_loader)
+        self.assertIn("const requestId = state.authRequestId + 1", signup_loader)
+        self.assertIn("state.authRequestId = requestId", signup_loader)
+        self.assertIn("state.authenticating = true", signup_loader)
+        self.assertIn("if (!isCurrentAuthRequest(requestId, emailText, pendingInviteToken, displayNameText))", signup_loader)
+        login_loader = js.text.split("async function loginWithPassword()", 1)[1].split(
+            "async function logoutSession", 1
+        )[0]
+        self.assertIn("const emailText = els.authEmail.value", login_loader)
+        self.assertIn("const pendingInviteToken = state.pendingInviteToken", login_loader)
+        self.assertIn("const requestId = state.authRequestId + 1", login_loader)
+        self.assertIn("state.authRequestId = requestId", login_loader)
+        self.assertIn("state.authenticating = true", login_loader)
+        self.assertIn("if (!isCurrentAuthRequest(requestId, emailText, pendingInviteToken))", login_loader)
+        logout_loader = js.text.split("async function logoutSession()", 1)[1].split(
+            "function isCurrentAuthRequest", 1
+        )[0]
+        self.assertIn("const sessionUserId = state.userId", logout_loader)
+        self.assertIn("const sessionToken = state.token", logout_loader)
+        self.assertIn("const requestId = state.logoutRequestId + 1", logout_loader)
+        self.assertIn("state.logoutRequestId = requestId", logout_loader)
+        self.assertIn("state.loggingOut = true", logout_loader)
+        self.assertIn("if (!isCurrentLogoutRequest(requestId, sessionUserId, sessionToken))", logout_loader)
+        self.assertIn("function isCurrentAuthRequest(requestId, emailText, pendingInviteToken, displayNameText)", js.text)
+        self.assertIn("state.authRequestId === requestId", js.text)
+        self.assertIn("els.authEmail.value === emailText", js.text)
+        self.assertIn("state.pendingInviteToken === pendingInviteToken", js.text)
+        self.assertIn("displayNameText === undefined || els.authName.value === displayNameText", js.text)
+        self.assertIn("function invalidateAuthRequests()", js.text)
+        self.assertIn("state.authRequestId += 1", js.text)
+        self.assertIn("state.authenticating = false", js.text)
+        self.assertIn("function isCurrentLogoutRequest(requestId, sessionUserId, sessionToken)", js.text)
+        self.assertIn("state.logoutRequestId === requestId", js.text)
+        self.assertIn("state.token === sessionToken", js.text)
+        self.assertIn("function invalidateLogoutRequests()", js.text)
+        self.assertIn("state.logoutRequestId += 1", js.text)
+        self.assertIn("state.loggingOut = false", js.text)
+        self.assertIn("els.authName.addEventListener(\"input\"", js.text)
+        self.assertIn("els.authEmail.addEventListener(\"input\"", js.text)
+        self.assertIn("els.authPassword.addEventListener(\"input\"", js.text)
+        self.assertIn(
+            "invalidateAuthRequests()",
+            js.text.split("els.authPassword.addEventListener(\"input\"", 1)[1].split(
+                "els.signupButton.addEventListener", 1
+            )[0],
+        )
         self.assertIn("/editor-bootstrap", js.text)
         self.assertIn("/schemas", js.text)
         self.assertIn("/schema-matches", js.text)
@@ -192,10 +243,17 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function resetZipImportSelection(message)", js.text)
         self.assertIn("state.zipPreviewing = false", js.text)
         self.assertIn("state.zipApplying = false", js.text)
+        self.assertIn("state.authenticating", js.text)
+        self.assertIn("state.loggingOut", js.text)
+        self.assertIn("state.refreshingSession", js.text)
         self.assertIn("state.creatingProject", js.text)
         self.assertIn("state.creatingInvite", js.text)
         self.assertIn("state.acceptingInvite", js.text)
         self.assertIn("state.creatingDocument", js.text)
+        self.assertIn("state.authRequestId", js.text)
+        self.assertIn("state.logoutRequestId", js.text)
+        self.assertIn("state.sessionRefreshRequestId", js.text)
+        self.assertIn("state.sessionRefreshPromise", js.text)
         self.assertIn("state.createFileImportRequestId", js.text)
         self.assertIn("state.editorFileImportRequestId", js.text)
         self.assertIn("state.projectInviteAcceptRequestId", js.text)
@@ -205,6 +263,30 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("/auth/login", js.text)
         self.assertIn("/auth/logout", js.text)
         self.assertIn("/auth/refresh", js.text)
+        refresh_loader = js.text.split("async function refreshAccessToken()", 1)[1].split(
+            "function isCurrentSessionRefreshRequest", 1
+        )[0]
+        self.assertIn("const refreshToken = state.refreshToken", refresh_loader)
+        self.assertIn("state.refreshingSession && state.sessionRefreshPromise", refresh_loader)
+        self.assertIn("return state.sessionRefreshPromise", refresh_loader)
+        self.assertIn("const requestId = state.sessionRefreshRequestId + 1", refresh_loader)
+        self.assertIn("state.sessionRefreshRequestId = requestId", refresh_loader)
+        self.assertIn("state.refreshingSession = true", refresh_loader)
+        self.assertIn("refresh_token: refreshToken", refresh_loader)
+        self.assertIn("if (!isCurrentSessionRefreshRequest(requestId, refreshToken))", refresh_loader)
+        self.assertIn("state.sessionRefreshPromise = refreshPromise", refresh_loader)
+        self.assertIn("function isCurrentSessionRefreshRequest(requestId, refreshToken)", js.text)
+        self.assertIn("state.sessionRefreshRequestId === requestId && state.refreshToken === refreshToken", js.text)
+        self.assertIn("function invalidateSessionRefreshRequests()", js.text)
+        self.assertIn("state.sessionRefreshRequestId += 1", js.text)
+        self.assertIn("state.refreshingSession = false", js.text)
+        self.assertIn("state.sessionRefreshPromise = null", js.text)
+        session_clearer_for_auth = js.text.split("function clearSessionState", 1)[1].split(
+            "function invitePromptText", 1
+        )[0]
+        self.assertIn("invalidateAuthRequests()", session_clearer_for_auth)
+        self.assertIn("invalidateLogoutRequests()", session_clearer_for_auth)
+        self.assertIn("invalidateSessionRefreshRequests()", session_clearer_for_auth)
         self.assertIn("/offline-sync", js.text)
         self.assertIn("/invitations/accept", js.text)
         self.assertIn("/projects/${encodeURIComponent(projectId)}/invitations", js.text)

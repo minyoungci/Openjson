@@ -112,6 +112,10 @@
     userDisplayName: localStorage.getItem("openjson.userDisplayName") || "",
     userEmail: localStorage.getItem("openjson.userEmail") || "",
     pendingInviteToken: initialParams.get("invite_token") || "",
+    authRequestId: 0,
+    logoutRequestId: 0,
+    sessionRefreshRequestId: 0,
+    sessionRefreshPromise: null,
     workspaces: [],
     availableProjects: [],
     projectHomeErrors: [],
@@ -179,6 +183,9 @@
     rollbackRequestId: 0,
     saving: false,
     rollingBack: false,
+    authenticating: false,
+    loggingOut: false,
+    refreshingSession: false,
     creatingProject: false,
     creatingInvite: false,
     acceptingInvite: false,
@@ -277,6 +284,23 @@
         return;
       }
       openProject(projectId, null).catch((error) => renderError(els.projectSetupOutput, error));
+    });
+
+    els.authName.addEventListener("input", () => {
+      invalidateAuthRequests();
+      syncAccountLabels();
+      syncButtons();
+    });
+
+    els.authEmail.addEventListener("input", () => {
+      invalidateAuthRequests();
+      syncAccountLabels();
+      syncButtons();
+    });
+
+    els.authPassword.addEventListener("input", () => {
+      invalidateAuthRequests();
+      syncButtons();
     });
 
     els.signupButton.addEventListener("click", () => {
@@ -817,42 +841,93 @@
   }
 
   async function signupWithPassword() {
-    const displayName = els.authName.value.trim();
-    const email = els.authEmail.value.trim();
+    const displayNameText = els.authName.value;
+    const emailText = els.authEmail.value;
+    const displayName = displayNameText.trim();
+    const email = emailText.trim();
     const password = els.authPassword.value;
     if (!displayName || !email || !password) {
       renderText(els.authOutput, "Name, email, and password are required.", "error-text");
       return;
     }
-    const result = await apiFetch("/auth/signup", {
-      method: "POST",
-      auth: false,
-      body: {
-        display_name: displayName,
-        email,
-        password,
-      },
-    });
+    if (state.authenticating) {
+      return;
+    }
+    const pendingInviteToken = state.pendingInviteToken;
+    const requestId = state.authRequestId + 1;
+    state.authRequestId = requestId;
+    state.authenticating = true;
+    syncButtons();
+    let result;
+    try {
+      result = await apiFetch("/auth/signup", {
+        method: "POST",
+        auth: false,
+        body: {
+          display_name: displayName,
+          email,
+          password,
+        },
+      });
+    } catch (error) {
+      if (!isCurrentAuthRequest(requestId, emailText, pendingInviteToken, displayNameText)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.authRequestId === requestId) {
+        state.authenticating = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentAuthRequest(requestId, emailText, pendingInviteToken, displayNameText)) {
+      return;
+    }
     applyAuthenticatedSession(result);
     renderText(els.authOutput, `Signed in as ${result.user.display_name}.`, "ok-text");
     await enterAuthenticatedArea();
   }
 
   async function loginWithPassword() {
-    const email = els.authEmail.value.trim();
+    const emailText = els.authEmail.value;
+    const email = emailText.trim();
     const password = els.authPassword.value;
     if (!email || !password) {
       renderText(els.authOutput, "Email and password are required.", "error-text");
       return;
     }
-    const result = await apiFetch("/auth/login", {
-      method: "POST",
-      auth: false,
-      body: {
-        email,
-        password,
-      },
-    });
+    if (state.authenticating) {
+      return;
+    }
+    const pendingInviteToken = state.pendingInviteToken;
+    const requestId = state.authRequestId + 1;
+    state.authRequestId = requestId;
+    state.authenticating = true;
+    syncButtons();
+    let result;
+    try {
+      result = await apiFetch("/auth/login", {
+        method: "POST",
+        auth: false,
+        body: {
+          email,
+          password,
+        },
+      });
+    } catch (error) {
+      if (!isCurrentAuthRequest(requestId, emailText, pendingInviteToken)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.authRequestId === requestId) {
+        state.authenticating = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentAuthRequest(requestId, emailText, pendingInviteToken)) {
+      return;
+    }
     applyAuthenticatedSession(result);
     renderText(els.authOutput, `Signed in as ${result.user.display_name}.`, "ok-text");
     await enterAuthenticatedArea();
@@ -865,15 +940,68 @@
       syncButtons();
       return;
     }
+    if (state.loggingOut) {
+      return;
+    }
+    const sessionUserId = state.userId;
+    const sessionToken = state.token;
     const preserveInvite = Boolean(state.pendingInviteToken);
-    await apiFetch("/auth/logout", {
-      method: "POST",
-    });
+    const requestId = state.logoutRequestId + 1;
+    state.logoutRequestId = requestId;
+    state.loggingOut = true;
+    syncButtons();
+    try {
+      await apiFetch("/auth/logout", {
+        method: "POST",
+      });
+    } catch (error) {
+      if (!isCurrentLogoutRequest(requestId, sessionUserId, sessionToken)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.logoutRequestId === requestId) {
+        state.loggingOut = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentLogoutRequest(requestId, sessionUserId, sessionToken)) {
+      return;
+    }
     clearSessionState({ preserveInvite });
     renderText(els.authOutput, "Signed out.", "muted");
     restartCollaborationLoop();
     syncButtons();
     showAuthScreen(preserveInvite ? invitePromptText() : "Signed out.");
+  }
+
+  function isCurrentAuthRequest(requestId, emailText, pendingInviteToken, displayNameText) {
+    return (
+      state.authRequestId === requestId &&
+      els.authEmail.value === emailText &&
+      state.pendingInviteToken === pendingInviteToken &&
+      (displayNameText === undefined || els.authName.value === displayNameText)
+    );
+  }
+
+  function invalidateAuthRequests() {
+    state.authRequestId += 1;
+    state.authenticating = false;
+    syncButtons();
+  }
+
+  function isCurrentLogoutRequest(requestId, sessionUserId, sessionToken) {
+    return (
+      state.logoutRequestId === requestId &&
+      state.userId === sessionUserId &&
+      state.token === sessionToken
+    );
+  }
+
+  function invalidateLogoutRequests() {
+    state.logoutRequestId += 1;
+    state.loggingOut = false;
+    syncButtons();
   }
 
   function applyAuthenticatedSession(result) {
@@ -905,6 +1033,9 @@
     state.refreshToken = "";
     state.projectId = "";
     state.selectedDocumentId = "";
+    invalidateAuthRequests();
+    invalidateLogoutRequests();
+    invalidateSessionRefreshRequests();
     invalidateProjectHomeRequests();
     invalidateCreateProjectRequests();
     invalidateBootstrapRequests();
@@ -3286,6 +3417,9 @@
       state.loading ||
       state.saving ||
       state.rollingBack ||
+      state.authenticating ||
+      state.loggingOut ||
+      state.refreshingSession ||
       state.creatingProject ||
       state.creatingInvite ||
       state.acceptingInvite ||
@@ -3841,21 +3975,61 @@
   }
 
   async function refreshAccessToken() {
-    try {
-      const result = await apiFetch("/auth/refresh", {
-        method: "POST",
-        auth: false,
-        body: {
-          refresh_token: state.refreshToken,
-        },
-        retrying: true,
-      });
-      applyAuthenticatedSession(result);
-      return true;
-    } catch (error) {
-      clearSessionState();
+    const refreshToken = state.refreshToken;
+    if (!refreshToken) {
       return false;
     }
+    if (state.refreshingSession && state.sessionRefreshPromise) {
+      return state.sessionRefreshPromise;
+    }
+    const requestId = state.sessionRefreshRequestId + 1;
+    state.sessionRefreshRequestId = requestId;
+    state.refreshingSession = true;
+    syncButtons();
+    const refreshPromise = (async () => {
+      try {
+        const result = await apiFetch("/auth/refresh", {
+          method: "POST",
+          auth: false,
+          body: {
+            refresh_token: refreshToken,
+          },
+          retrying: true,
+        });
+        if (!isCurrentSessionRefreshRequest(requestId, refreshToken)) {
+          return false;
+        }
+        applyAuthenticatedSession(result);
+        return true;
+      } catch (error) {
+        if (!isCurrentSessionRefreshRequest(requestId, refreshToken)) {
+          return false;
+        }
+        clearSessionState();
+        return false;
+      } finally {
+        if (state.sessionRefreshRequestId === requestId) {
+          state.refreshingSession = false;
+          state.sessionRefreshPromise = null;
+          syncButtons();
+        } else if (state.sessionRefreshPromise === refreshPromise) {
+          state.sessionRefreshPromise = null;
+        }
+      }
+    })();
+    state.sessionRefreshPromise = refreshPromise;
+    return refreshPromise;
+  }
+
+  function isCurrentSessionRefreshRequest(requestId, refreshToken) {
+    return state.sessionRefreshRequestId === requestId && state.refreshToken === refreshToken;
+  }
+
+  function invalidateSessionRefreshRequests() {
+    state.sessionRefreshRequestId += 1;
+    state.refreshingSession = false;
+    state.sessionRefreshPromise = null;
+    syncButtons();
   }
 
   function queueOfflineSave(payload) {
