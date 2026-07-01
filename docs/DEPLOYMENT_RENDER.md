@@ -138,19 +138,29 @@ OPENJSON_OIDC_JWKS_URI=
 ## Deploy Steps
 
 1. Push this repository to GitHub.
-2. Open the Render Blueprint URL:
+2. Run the local release preflight:
+
+```powershell
+python scripts\release_preflight.py
+```
+
+The preflight should return `"status": "ok"` before the Render deploy. If it
+reports a dirty worktree, a non-`main` branch, an out-of-sync upstream, missing
+runtime files, or a broken `render.yaml` guard, fix that first.
+
+3. Open the Render Blueprint URL:
 
 ```text
 https://dashboard.render.com/blueprint/new?repo=https://github.com/minyoungci/Openjson
 ```
 
-3. Connect GitHub if Render asks for access.
-4. Review the Blueprint resources.
-5. Apply the Blueprint.
-6. Wait until the service is live.
-7. Apply the Cost Controls above in Workspace Settings.
-8. Add `openjson.thelumen.work` as a custom domain in Render.
-9. In Cloudflare DNS, create:
+4. Connect GitHub if Render asks for access.
+5. Review the Blueprint resources.
+6. Apply the Blueprint.
+7. Wait until the service is live.
+8. Apply the Cost Controls above in Workspace Settings.
+9. Add `openjson.thelumen.work` as a custom domain in Render.
+10. In Cloudflare DNS, create:
 
 ```text
 Type: CNAME
@@ -188,6 +198,15 @@ You can run the deployment status smoke from this repo:
 python scripts\smoke_deployment_status.py `
   --base-url https://openjson.thelumen.work `
   --expect-commit <git-sha> `
+  --expect-actor-header-allowed false
+```
+
+The combined release/deployment preflight also checks local Git readiness,
+Render Blueprint guard settings, and the official URL:
+
+```powershell
+python scripts\release_preflight.py `
+  --base-url https://openjson.thelumen.work `
   --expect-actor-header-allowed false
 ```
 

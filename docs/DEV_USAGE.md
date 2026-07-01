@@ -137,6 +137,12 @@ Deployment status smoke:
 python scripts\smoke_deployment_status.py --base-url http://127.0.0.1:8000
 ```
 
+Release preflight before sharing or redeploying:
+
+```powershell
+python scripts\release_preflight.py
+```
+
 For the official URL after a manual Render deploy:
 
 ```powershell
@@ -146,11 +152,20 @@ python scripts\smoke_deployment_status.py `
   --expect-actor-header-allowed false
 ```
 
+Or run the combined release/deployment preflight:
+
+```powershell
+python scripts\release_preflight.py `
+  --base-url https://openjson.thelumen.work `
+  --expect-actor-header-allowed false
+```
+
 This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
 and does not create users, projects, documents, or events. See
 `docs/TASK_114_PLAN.md`, `docs/TASK_115_PLAN.md`, and
 `docs/TASK_116_PLAN.md`. See `docs/TASK_117_PLAN.md` for WebSocket message
 rate limiting and `docs/TASK_121_PLAN.md` for structured failure diagnostics.
+See `docs/TASK_122_PLAN.md` for the release preflight CLI.
 If the official URL returns `VERSION_ENDPOINT_NOT_FOUND`, the custom domain is
 not yet serving a build that includes `/version`; trigger a manual Render deploy
 from the latest `main` commit and rerun the smoke.
