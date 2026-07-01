@@ -220,7 +220,7 @@ def _active_presence_rows(conn: sqlite3.Connection, row: sqlite3.Row) -> list[di
     cutoff = _presence_cutoff()
     rows = conn.execute(
         """
-        SELECT p.*, u.display_name, u.email
+        SELECT p.*, u.display_name
         FROM editor_presence AS p
         JOIN users AS u ON u.id = p.actor_id
         WHERE p.document_id = ?
@@ -233,7 +233,6 @@ def _active_presence_rows(conn: sqlite3.Connection, row: sqlite3.Row) -> list[di
         {
             "actor_id": item["actor_id"],
             "display_name": item["display_name"],
-            "email": item["email"],
             "status": item["status"],
             "base_version": item["base_version"],
             "dirty": bool(item["dirty"]),

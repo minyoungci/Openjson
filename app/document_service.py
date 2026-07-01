@@ -237,10 +237,11 @@ def _event_rows(conn: sqlite3.Connection, document_id: str) -> list[sqlite3.Row]
     return list(
         conn.execute(
             """
-            SELECT *
-            FROM document_events
-            WHERE document_id = ?
-            ORDER BY result_version ASC
+            SELECT e.*, u.display_name AS actor_display_name
+            FROM document_events AS e
+            LEFT JOIN users AS u ON u.id = e.actor_id
+            WHERE e.document_id = ?
+            ORDER BY e.result_version ASC
             """,
             (document_id,),
         ).fetchall()
@@ -289,7 +290,7 @@ def _row_to_project_summary(row: sqlite3.Row, role: str) -> dict[str, Any]:
 
 
 def _row_to_event_metadata(row: sqlite3.Row) -> dict[str, Any]:
-    return {
+    event = {
         "id": row["id"],
         "document_id": row["document_id"],
         "actor_id": row["actor_id"],
@@ -301,6 +302,9 @@ def _row_to_event_metadata(row: sqlite3.Row) -> dict[str, Any]:
         "reason": row["reason"],
         "created_at": row["created_at"],
     }
+    if "actor_display_name" in row.keys():
+        event["actor_display_name"] = row["actor_display_name"]
+    return event
 
 
 def _row_to_event(row: sqlite3.Row) -> dict[str, Any]:
@@ -2048,9 +2052,13 @@ def list_project_document_events(
                 )
         rows = conn.execute(
             f"""
-            SELECT e.*, d.project_id AS project_id, d.full_path AS full_path
+            SELECT e.*,
+                   u.display_name AS actor_display_name,
+                   d.project_id AS project_id,
+                   d.full_path AS full_path
             FROM document_events AS e
             JOIN json_documents AS d ON d.id = e.document_id
+            LEFT JOIN users AS u ON u.id = e.actor_id
             WHERE {where_sql}
             ORDER BY e.created_at DESC, e.result_version DESC, e.id DESC
             """,
@@ -2707,9 +2715,10 @@ def get_document_event_detail(
         )
         event_row = conn.execute(
             """
-            SELECT *
-            FROM document_events
-            WHERE id = ? AND document_id = ?
+            SELECT e.*, u.display_name AS actor_display_name
+            FROM document_events AS e
+            LEFT JOIN users AS u ON u.id = e.actor_id
+            WHERE e.id = ? AND e.document_id = ?
             """,
             (event_id, document_id),
         ).fetchone()
@@ -2846,6 +2855,7 @@ def get_document_path_history(
                         "event_id": event["id"],
                         "event_type": event["event_type"],
                         "actor_id": event["actor_id"],
+                        "actor_display_name": event.get("actor_display_name"),
                         "base_version": event["base_version"],
                         "result_version": event["result_version"],
                         "changed_paths": event["changed_paths"],
@@ -2911,6 +2921,7 @@ def _path_change_to_blame(change: dict[str, Any]) -> dict[str, Any]:
         "event_id": change["event_id"],
         "event_type": change["event_type"],
         "actor_id": change["actor_id"],
+        "actor_display_name": change.get("actor_display_name"),
         "base_version": change["base_version"],
         "result_version": change["result_version"],
         "before": change["before"],

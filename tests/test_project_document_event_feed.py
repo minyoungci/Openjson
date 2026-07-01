@@ -129,6 +129,7 @@ class ProjectDocumentEventFeedTests(unittest.TestCase):
         ])
         self.assertEqual({event["project_id"] for event in result["events"]}, {self.project["id"]})
         self.assertEqual({event["document_id"] for event in result["events"]}, {model["id"], data["id"]})
+        self.assertEqual(result["events"][0]["actor_display_name"], "Editor")
         self.assertIn("/items/0/name", result["events"][0]["changed_paths"])
         self.assertEqual(self._event_count(), before_event_count)
         self.assertEqual(self._snapshot(model["id"]), before_snapshot)

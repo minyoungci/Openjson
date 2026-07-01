@@ -2643,7 +2643,7 @@
       title.textContent = `v${event.result_version} ${event.event_type}`;
       const meta = document.createElement("span");
       meta.className = "muted";
-      meta.textContent = `${event.actor_id} / ${event.created_at}`;
+      meta.textContent = `${event.actor_display_name || event.actor_id} / ${event.created_at}`;
       row.append(title, meta);
       els.historyPanel.appendChild(row);
     }

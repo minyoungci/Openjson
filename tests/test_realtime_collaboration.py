@@ -271,6 +271,7 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertEqual(message["state"]["current_version"], 2)
         self.assertEqual(message["state"]["checkpoints"][0]["event_id"], response.json()["event_id"])
         self.assertEqual(message["state"]["checkpoints"][0]["actor_id"], self.editor_id)
+        self.assertEqual(message["state"]["checkpoints"][0]["display_name"], "Editor")
         self.assertEqual(message["state"]["checkpoints"][0]["changed_paths"], ["/learning_rate"])
 
     def test_http_content_endpoint_broadcasts_checkpoint_without_client_refresh(self) -> None:

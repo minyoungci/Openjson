@@ -119,6 +119,7 @@ class DocumentFoundationTests(unittest.TestCase):
         history = get_history(self.db_path, document["id"], actor_id=self.actor_id)
         self.assertEqual(len(history["events"]), 1)
         self.assertEqual(history["events"][0]["event_type"], "create")
+        self.assertEqual(history["events"][0]["actor_display_name"], "Test User")
 
     def test_reject_invalid_json_document(self) -> None:
         with self.assertRaises(AppError) as raised:

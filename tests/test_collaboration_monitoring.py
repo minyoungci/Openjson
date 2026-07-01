@@ -77,6 +77,8 @@ class CollaborationMonitoringTests(unittest.TestCase):
         self.assertEqual(len(state["active_users"]), 1)
         user = state["active_users"][0]
         self.assertEqual(user["actor_id"], self.owner_id)
+        self.assertEqual(user["display_name"], "Owner")
+        self.assertNotIn("email", user)
         self.assertEqual(user["status"], "editing")
         self.assertTrue(user["dirty"])
         self.assertFalse(user["is_stale_base"])
@@ -113,6 +115,7 @@ class CollaborationMonitoringTests(unittest.TestCase):
         self.assertEqual(state["current_version"], 2)
         self.assertEqual(state["checkpoints"][0]["result_version"], 2)
         self.assertEqual(state["checkpoints"][0]["actor_id"], self.editor_id)
+        self.assertEqual(state["checkpoints"][0]["display_name"], "Editor")
         self.assertEqual(state["checkpoints"][0]["changed_paths"], ["/learning_rate"])
         self.assertTrue(state["active_users"][0]["is_stale_base"])
         assert_replay_matches_latest(self.db_path, self.document["id"])
@@ -192,6 +195,8 @@ class CollaborationMonitoringTests(unittest.TestCase):
         )
         self.assertEqual(heartbeat.status_code, 200)
         self.assertEqual(heartbeat.json()["active_users"][0]["actor_id"], self.owner_id)
+        self.assertEqual(heartbeat.json()["active_users"][0]["display_name"], "Owner")
+        self.assertNotIn("email", heartbeat.json()["active_users"][0])
 
         state = client.get(
             f"/documents/{self.document['id']}/collaboration-state?since_version=0",
@@ -199,6 +204,7 @@ class CollaborationMonitoringTests(unittest.TestCase):
         )
         self.assertEqual(state.status_code, 200)
         self.assertEqual(state.json()["checkpoints"][0]["event_type"], "create")
+        self.assertEqual(state.json()["checkpoints"][0]["display_name"], "Owner")
 
         leave = client.delete(
             f"/documents/{self.document['id']}/presence",
