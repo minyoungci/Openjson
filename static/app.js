@@ -130,6 +130,7 @@
     zipFile: null,
     zipPreview: null,
     presenceCursorTimer: null,
+    activePresenceDocumentId: "",
     collaborationTimer: null,
     presenceTimer: null,
     collaborationSocket: null,
@@ -1753,6 +1754,7 @@
       clearPanel(els.collaborationPanel, "No active document.");
       return;
     }
+    state.activePresenceDocumentId = state.selectedDocumentId;
     state.collaborationStopped = false;
     state.collaborationTransport = "polling";
     openCollaborationSocket();
@@ -1771,6 +1773,8 @@
 
   function stopCollaborationLoop() {
     state.collaborationStopped = true;
+    sendPresenceLeave(state.activePresenceDocumentId || state.selectedDocumentId);
+    state.activePresenceDocumentId = "";
     window.clearInterval(state.presenceTimer);
     window.clearInterval(state.collaborationTimer);
     window.clearTimeout(state.autosaveTimer);
@@ -2282,15 +2286,16 @@
     };
   }
 
-  function sendPresenceLeave() {
-    if (!state.selectedDocumentId || !state.token) {
+  function sendPresenceLeave(documentId) {
+    const targetDocumentId = documentId || state.activePresenceDocumentId || state.selectedDocumentId;
+    if (!targetDocumentId || !state.token) {
       return;
     }
     const headers = { Accept: "application/json" };
     if (state.token) {
       headers.Authorization = `Bearer ${state.token}`;
     }
-    fetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/presence`, {
+    fetch(`/documents/${encodeURIComponent(targetDocumentId)}/presence`, {
       method: "DELETE",
       headers,
       keepalive: true,

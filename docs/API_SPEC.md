@@ -193,6 +193,8 @@ collaboration and event views.
 See `docs/TASK_146_PLAN.md` for human-readable comment author display names.
 See `docs/TASK_147_PLAN.md` for editor cursor JSON Pointer presence in the
 browser collaboration panel.
+See `docs/TASK_148_PLAN.md` for explicit browser presence leave on document
+switch and page unload.
 
 ## Deployment Version
 
@@ -500,6 +502,10 @@ the path near the user's current editor cursor; this path is transient presence
 metadata and is not validated against the current snapshot contents. Autosave
 in the local editor calls the existing content save API, so an accepted
 autosave is a normal append-only `event_type = "update"` document event.
+The browser sends an explicit presence leave for the previously active
+document when switching documents, closing the page, or stopping its
+collaboration loop, so peers do not need to wait for the presence timeout in
+normal navigation flows.
 Accepted HTTP document mutations that leave the document active,
 including `PATCH /documents/{id}`, `PUT /documents/{id}/content`, and
 `POST /documents/{id}/rollback`, broadcast a fresh `collaboration_state` to

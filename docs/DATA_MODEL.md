@@ -479,6 +479,12 @@ browser from the raw editor cursor position. It does not validate that the path
 currently exists in the latest snapshot and it never becomes canonical document
 history.
 
+TASK_148 explicit browser presence leave also adds no table. The browser keeps
+the document id for the active presence heartbeat separately from the currently
+selected document id, and deletes that presence row when switching documents or
+stopping collaboration. Stale rows can still age out through the existing
+presence timeout when a client disappears abruptly.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
