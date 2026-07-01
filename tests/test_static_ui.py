@@ -248,8 +248,22 @@ class StaticUiTests(unittest.TestCase):
             "async function createProjectFromGate", 1
         )[0]
         self.assertIn("invalidateBootstrapRequests()", project_home_loader)
+        self.assertIn("invalidateTeamMembersRequests()", project_home_loader)
         self.assertIn("stopCollaborationLoop()", project_home_loader)
         self.assertIn("stopProjectWorkspaceSocket()", project_home_loader)
+        session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
+        self.assertIn("invalidateTeamMembersRequests()", session_clearer)
+        team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
+            "async function createProjectInvite", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", team_members_refresher)
+        self.assertIn("const requestId = state.teamMembersRequestId + 1", team_members_refresher)
+        self.assertIn("state.teamMembersRequestId = requestId", team_members_refresher)
+        self.assertIn("fetchProjectMembersSafe(projectId)", team_members_refresher)
+        self.assertIn("if (!isCurrentTeamMembersRequest(requestId, projectId))", team_members_refresher)
+        self.assertIn("function isCurrentTeamMembersRequest(requestId, projectId)", js.text)
+        self.assertIn("function invalidateTeamMembersRequests()", js.text)
+        self.assertIn("state.teamMembersRequestId += 1", js.text)
         self.assertIn("result.document_id !== state.selectedDocumentId", js.text)
         self.assertIn("createCommentThread", js.text)
         self.assertIn("addCommentReply", js.text)

@@ -214,6 +214,8 @@ See `docs/TASK_156_PLAN.md` for invalidating stale browser bootstrap loads
 when returning to the project selection screen.
 See `docs/TASK_157_PLAN.md` for guarding stale browser create-document schema
 match preview responses after project, path, or mode changes.
+See `docs/TASK_158_PLAN.md` for guarding stale browser team member refresh
+responses after project navigation or session changes.
 
 ## Deployment Version
 
@@ -659,6 +661,10 @@ Create-document schema match previews in the static browser are applied only
 when the response still belongs to the latest preview request for the same
 project id, candidate `full_path`, visible create panel, and automatic schema
 mode.
+Manual team member refreshes in the static browser are applied only when the
+response still belongs to the latest member refresh request for the active
+project id. Returning to project selection or clearing session state invalidates
+outstanding member refreshes.
 
 Offline sync accepts a batch of queued client content-save operations:
 

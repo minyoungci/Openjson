@@ -548,6 +548,15 @@ mode. This is client-only preview state and does not affect schema rows,
 document creation, canonical snapshots, append-only `document_events`, or
 WebSocket server state.
 
+TASK_158 stale team member refresh guarding also adds no table. The static
+browser client tracks manual project member refresh requests in memory and
+applies a response only while it still matches the latest request and active
+project id. Returning to project selection or clearing session state
+invalidates outstanding member refreshes. This is client-only state and does
+not affect `project_members`, membership audit events, canonical snapshots,
+append-only `document_events`, schemas, comments, reviews, or WebSocket server
+state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

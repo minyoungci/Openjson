@@ -123,6 +123,7 @@
     schemaListError: null,
     projectMembers: [],
     memberListError: null,
+    teamMembersRequestId: 0,
     projectUsage: null,
     projectUsageError: null,
     commentThreads: [],
@@ -498,6 +499,7 @@
       return;
     }
     invalidateBootstrapRequests();
+    invalidateTeamMembersRequests();
     stopCollaborationLoop();
     stopProjectWorkspaceSocket();
     state.loading = true;
@@ -752,6 +754,7 @@
     state.projectId = "";
     state.selectedDocumentId = "";
     invalidateBootstrapRequests();
+    invalidateTeamMembersRequests();
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
@@ -927,10 +930,27 @@
   }
 
   async function refreshTeamMembers() {
-    const data = await fetchProjectMembersSafe();
+    const projectId = state.projectId;
+    if (!projectId) {
+      return;
+    }
+    const requestId = state.teamMembersRequestId + 1;
+    state.teamMembersRequestId = requestId;
+    const data = await fetchProjectMembersSafe(projectId);
+    if (!isCurrentTeamMembersRequest(requestId, projectId)) {
+      return;
+    }
     state.projectMembers = data.members;
     state.memberListError = data.error;
     renderTeamPanel();
+  }
+
+  function isCurrentTeamMembersRequest(requestId, projectId) {
+    return state.teamMembersRequestId === requestId && state.projectId === projectId;
+  }
+
+  function invalidateTeamMembersRequests() {
+    state.teamMembersRequestId += 1;
   }
 
   async function createProjectInvite() {
