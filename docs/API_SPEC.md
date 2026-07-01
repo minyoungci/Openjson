@@ -218,6 +218,9 @@ See `docs/TASK_158_PLAN.md` for guarding stale browser team member refresh
 responses after project navigation or session changes.
 See `docs/TASK_159_PLAN.md` for guarding stale browser project-home list
 responses after project navigation, creation, or session changes.
+See `docs/TASK_160_PLAN.md` for guarding stale browser comment-thread list
+responses and in-flight comment actions after overlapping loads or document
+switches.
 
 ## Deployment Version
 
@@ -630,6 +633,10 @@ Comment thread and comment list payloads preserve durable `created_by`,
 `created_by_display_name`, `resolved_by_display_name`, and
 `author_display_name` when the corresponding user row is available. Browser UI
 should prefer display names for readability and keep ids only as fallbacks.
+The static browser client applies comment-thread list responses only when the
+response belongs to the latest comment-thread load request for the currently
+selected document. It also ignores stale completed comment actions if the user
+switches documents before the action returns.
 
 Document soft-delete and restore mutations send `document.lifecycle` over the
 same document WebSocket channel after the mutation transaction commits. The

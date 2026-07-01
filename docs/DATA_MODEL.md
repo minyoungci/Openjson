@@ -566,6 +566,18 @@ outstanding project-home loads. This is client-only state and does not affect
 workspaces, projects, memberships, canonical snapshots, append-only
 `document_events`, schemas, comments, reviews, or WebSocket server state.
 
+TASK_160 stale comment-thread load guarding also adds no table. The static
+browser client tracks comment-thread list requests in memory and applies note
+thread results only while they still match the latest request and selected
+document id. Clearing the selected editor, receiving a live selected-document
+delete payload, or clearing session state invalidates outstanding comment-thread
+loads. In-flight create, reply, resolve, and reopen actions capture their
+starting document id before mutating server state and skip browser UI refreshes
+if the selected document changes before completion. This is client-only state
+and does not affect `comment_threads`, append-only `comments`, canonical
+snapshots, append-only `document_events`, schemas, reviews, or WebSocket server
+state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

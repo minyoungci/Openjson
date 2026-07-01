@@ -213,6 +213,16 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("loadCommentThreads", js.text)
         self.assertIn("comment_threads.updated", js.text)
         self.assertIn("applyCommentThreadsUpdated", js.text)
+        comment_loader = js.text.split("async function loadCommentThreads()", 1)[1].split(
+            "async function applyCommentThreadsUpdated", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", comment_loader)
+        self.assertIn("const requestId = state.commentThreadsRequestId + 1", comment_loader)
+        self.assertIn("state.commentThreadsRequestId = requestId", comment_loader)
+        self.assertIn("if (!isCurrentCommentThreadsRequest(requestId, documentId))", comment_loader)
+        self.assertIn("function isCurrentCommentThreadsRequest(requestId, documentId)", js.text)
+        self.assertIn("function invalidateCommentThreadsRequests()", js.text)
+        self.assertIn("state.commentThreadsRequestId += 1", js.text)
         self.assertIn("Notes updated.", js.text)
         self.assertIn("document.lifecycle", js.text)
         self.assertIn("applyDocumentLifecycleUpdate", js.text)
@@ -280,6 +290,22 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("addCommentReply", js.text)
         self.assertIn("setCommentThreadStatus", js.text)
         self.assertIn("renderCommentThreads", js.text)
+        comment_creator = js.text.split("async function createCommentThread()", 1)[1].split(
+            "async function addCommentReply", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", comment_creator)
+        self.assertIn("/documents/${encodeURIComponent(documentId)}/comment-threads", comment_creator)
+        self.assertIn("if (documentId !== state.selectedDocumentId)", comment_creator)
+        comment_reply = js.text.split("async function addCommentReply", 1)[1].split(
+            "async function setCommentThreadStatus", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", comment_reply)
+        self.assertIn("if (documentId !== state.selectedDocumentId)", comment_reply)
+        comment_status = js.text.split("async function setCommentThreadStatus", 1)[1].split(
+            "async function handleCommentsPanelClick", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", comment_status)
+        self.assertIn("if (documentId !== state.selectedDocumentId)", comment_status)
         self.assertIn("/comment-threads", js.text)
         self.assertIn("/comments", js.text)
         self.assertIn("/resolve", js.text)

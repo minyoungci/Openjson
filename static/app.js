@@ -128,6 +128,7 @@
     projectUsage: null,
     projectUsageError: null,
     commentThreads: [],
+    commentThreadsRequestId: 0,
     createSchemaMatch: null,
     schemaMatchTimer: null,
     schemaMatchRequestId: 0,
@@ -784,10 +785,12 @@
     invalidateProjectHomeRequests();
     invalidateBootstrapRequests();
     invalidateTeamMembersRequests();
+    invalidateCommentThreadsRequests();
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
     state.projectSchemas = [];
+    state.commentThreads = [];
     state.availableProjects = [];
     if (preserveInvite && inviteToken) {
       state.pendingInviteToken = inviteToken;
@@ -1275,6 +1278,7 @@
   function clearEditor() {
     state.selectedEditorState = null;
     state.selectedDocumentId = "";
+    invalidateCommentThreadsRequests();
     state.originalText = "";
     state.liveTextShadow = "";
     state.liveTextRevision = 0;
@@ -1557,19 +1561,37 @@
   }
 
   async function loadCommentThreads() {
-    if (!state.selectedDocumentId) {
+    const documentId = state.selectedDocumentId;
+    const requestId = state.commentThreadsRequestId + 1;
+    state.commentThreadsRequestId = requestId;
+    if (!documentId) {
       state.commentThreads = [];
       clearPanel(els.commentsPanel, "No document selected.");
       return;
     }
-    const documentId = state.selectedDocumentId;
     clearPanel(els.commentsPanel, "Loading notes...");
-    const result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/comment-threads`);
-    if (documentId !== state.selectedDocumentId) {
+    let result;
+    try {
+      result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/comment-threads`);
+    } catch (error) {
+      if (!isCurrentCommentThreadsRequest(requestId, documentId)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentCommentThreadsRequest(requestId, documentId)) {
       return;
     }
     state.commentThreads = result.threads || [];
     renderCommentThreads();
+  }
+
+  function isCurrentCommentThreadsRequest(requestId, documentId) {
+    return state.commentThreadsRequestId === requestId && state.selectedDocumentId === documentId;
+  }
+
+  function invalidateCommentThreadsRequests() {
+    state.commentThreadsRequestId += 1;
   }
 
   async function applyCommentThreadsUpdated(payload) {
@@ -1590,6 +1612,7 @@
         const pathLabel = payload.full_path || els.documentPath.textContent || "Document";
         state.selectedEditorState = null;
         state.selectedDocumentId = "";
+        invalidateCommentThreadsRequests();
         state.liveTextShadow = "";
         state.liveTextRevision = 0;
         state.liveTextPendingOperation = false;
@@ -1634,6 +1657,7 @@
     if (!state.selectedDocumentId) {
       return;
     }
+    const documentId = state.selectedDocumentId;
     const body = cleanOptional(els.commentBody.value);
     if (!body) {
       renderText(els.commentsPanel, "Note body is required.", "error-text");
@@ -1649,10 +1673,13 @@
     } else if (anchorType === "event") {
       payload.event_id = cleanOptional(els.commentEventId.value);
     }
-    await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/comment-threads`, {
+    await apiFetch(`/documents/${encodeURIComponent(documentId)}/comment-threads`, {
       method: "POST",
       body: payload,
     });
+    if (documentId !== state.selectedDocumentId) {
+      return;
+    }
     els.commentBody.value = "";
     await loadCommentThreads();
     setEditorStatus("Note added.", "ok");
@@ -1660,6 +1687,10 @@
   }
 
   async function addCommentReply(threadId) {
+    const documentId = state.selectedDocumentId;
+    if (!documentId) {
+      return;
+    }
     const input = findReplyInput(threadId);
     const body = input ? cleanOptional(input.value) : "";
     if (!body) {
@@ -1670,11 +1701,18 @@
       method: "POST",
       body: { body },
     });
+    if (documentId !== state.selectedDocumentId) {
+      return;
+    }
     await loadCommentThreads();
     setEditorStatus("Reply added.", "ok");
   }
 
   async function setCommentThreadStatus(threadId, action) {
+    const documentId = state.selectedDocumentId;
+    if (!documentId) {
+      return;
+    }
     const path =
       action === "resolve"
         ? `/comment-threads/${encodeURIComponent(threadId)}/resolve`
@@ -1682,6 +1720,9 @@
     await apiFetch(path, {
       method: "POST",
     });
+    if (documentId !== state.selectedDocumentId) {
+      return;
+    }
     await loadCommentThreads();
     setEditorStatus(action === "resolve" ? "Note resolved." : "Note reopened.", "ok");
   }
