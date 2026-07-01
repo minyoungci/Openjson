@@ -57,7 +57,96 @@
       </symbol>
     </svg>
 
-    <div class="app-shell">
+    <main id="authScreen" class="entry-screen">
+      <section class="entry-panel auth-entry">
+        <div class="brand-block entry-brand">
+          <div class="brand-mark">OJ</div>
+          <div>
+            <h1>OpenJson</h1>
+            <p>Collaborative JSON workspace</p>
+          </div>
+        </div>
+        <div class="entry-form">
+          <label class="stacked-label">
+            Name
+            <input id="authNameInput" autocomplete="name" placeholder="Min Kim" />
+          </label>
+          <label class="stacked-label">
+            Email
+            <input id="authEmailInput" autocomplete="email" placeholder="min@example.com" />
+          </label>
+          <label class="stacked-label">
+            Password
+            <input id="authPasswordInput" autocomplete="current-password" type="password" />
+          </label>
+          <div class="button-row">
+            <button id="loginButton" class="primary-button" type="button">Login</button>
+            <button id="signupButton" class="secondary-button" type="button">Sign Up</button>
+          </div>
+          <div id="authOutput" class="dense-output compact-output">Sign in to open a project.</div>
+        </div>
+      </section>
+    </main>
+
+    <main id="projectScreen" class="entry-screen hidden">
+      <section class="entry-panel project-entry">
+        <div class="entry-heading">
+          <div>
+            <h1>Projects</h1>
+            <p id="projectHomeLabel">Create a project or open one you already belong to.</p>
+          </div>
+          <button id="projectLogoutButton" class="secondary-button" type="button">Logout</button>
+        </div>
+
+        <div class="project-entry-grid">
+          <section class="entry-subsection">
+            <div class="panel-heading">
+              <h2>Create Project</h2>
+            </div>
+            <label class="stacked-label">
+              Workspace name
+              <input id="workspaceNameInput" autocomplete="organization" placeholder="Team Workspace" />
+            </label>
+            <label class="stacked-label">
+              Project name
+              <input id="projectNameInput" autocomplete="off" placeholder="Model Configs" />
+            </label>
+            <label class="stacked-label">
+              Description
+              <textarea id="projectDescriptionInput" rows="3" placeholder="Shared JSON files for this team"></textarea>
+            </label>
+            <button id="createProjectButton" class="primary-button full-width" type="button">Create Project</button>
+          </section>
+
+          <section class="entry-subsection">
+            <div class="panel-heading">
+              <h2>Your Projects</h2>
+              <button id="refreshProjectsButton" class="icon-button" type="button" title="Refresh projects" aria-label="Refresh projects">
+                <svg><use href="#icon-refresh"></use></svg>
+              </button>
+            </div>
+            <div id="projectList" class="project-list" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <section class="entry-subsection invite-entry">
+          <div class="panel-heading">
+            <h2>Join With Invite</h2>
+          </div>
+          <div class="invite-row">
+            <label class="stacked-label">
+              Invite token
+              <input id="projectInviteTokenInput" autocomplete="off" placeholder="oji_..." />
+            </label>
+            <button id="acceptInviteButton" class="secondary-button" type="button">Join</button>
+          </div>
+        </section>
+
+        <div id="projectSetupOutput" class="dense-output compact-output">Project access is loaded from your account.</div>
+      </section>
+    </main>
+
+    <div id="workspaceShell" class="app-shell hidden">
       <header class="topbar">
         <div class="brand-block">
           <div class="brand-mark">OJ</div>
@@ -66,54 +155,24 @@
             <p id="projectLabel">Workspace editor</p>
           </div>
         </div>
-        <form id="connectionForm" class="connection-bar">
-          <label>
-            Actor
-            <input id="actorIdInput" name="actorId" autocomplete="off" />
-          </label>
-          <label>
-            Project
-            <input id="projectIdInput" name="projectId" autocomplete="off" />
-          </label>
-          <label>
-            Token
-            <input id="tokenInput" name="token" autocomplete="off" type="password" />
-          </label>
-          <button class="icon-button strong" type="submit" title="Load workspace" aria-label="Load workspace">
-            <svg><use href="#icon-refresh"></use></svg>
-          </button>
+        <form id="connectionForm" class="hidden" aria-hidden="true">
+          <input id="actorIdInput" name="actorId" type="hidden" />
+          <input id="projectIdInput" name="projectId" type="hidden" />
+          <input id="tokenInput" name="token" type="hidden" />
+          <button type="submit">Load</button>
+        </form>
+        <div class="top-actions">
+          <span id="sessionBadge" class="session-badge"></span>
+          <button id="projectSwitcherButton" class="secondary-button" type="button">Projects</button>
           <button id="copyLinkButton" class="icon-button" type="button" title="Copy share link" aria-label="Copy share link">
             <svg><use href="#icon-link"></use></svg>
           </button>
-        </form>
+          <button id="logoutButton" class="secondary-button" type="button">Logout</button>
+        </div>
       </header>
 
       <main class="workspace-grid">
         <aside class="sidebar">
-          <section class="panel account-panel">
-            <div class="panel-heading">
-              <h2>Account</h2>
-            </div>
-            <label class="stacked-label">
-              Name
-              <input id="authNameInput" autocomplete="name" placeholder="Min Kim" />
-            </label>
-            <label class="stacked-label">
-              Email
-              <input id="authEmailInput" autocomplete="email" placeholder="min@example.com" />
-            </label>
-            <label class="stacked-label">
-              Password
-              <input id="authPasswordInput" autocomplete="current-password" type="password" />
-            </label>
-            <div class="button-row compact-row">
-              <button id="signupButton" class="secondary-button" type="button">Sign Up</button>
-              <button id="loginButton" class="primary-button" type="button">Login</button>
-              <button id="logoutButton" class="secondary-button" type="button">Logout</button>
-            </div>
-            <div id="authOutput" class="dense-output compact-output">Use a session token or dev actor.</div>
-          </section>
-
           <section class="panel panel-flush">
             <div class="panel-heading">
               <h2>Documents</h2>
@@ -161,30 +220,6 @@
             </div>
             <div id="teamMembersOutput" class="dense-output compact-output">Load a project to view members.</div>
             <label class="stacked-label">
-              Display name
-              <input id="newUserNameInput" autocomplete="off" placeholder="Min Kim" />
-            </label>
-            <label class="stacked-label">
-              Email
-              <input id="newUserEmailInput" autocomplete="off" placeholder="min@example.com" />
-            </label>
-            <button id="createUserButton" class="secondary-button full-width" type="button">Create User</button>
-            <label class="stacked-label">
-              User ID
-              <input id="memberUserIdInput" autocomplete="off" placeholder="user_..." />
-            </label>
-            <label class="stacked-label">
-              Role
-              <select id="memberRoleSelect">
-                <option value="editor">editor</option>
-                <option value="viewer">viewer</option>
-                <option value="reviewer">reviewer</option>
-                <option value="admin">admin</option>
-                <option value="owner">owner</option>
-              </select>
-            </label>
-            <button id="addMemberButton" class="primary-button full-width" type="button">Add Member</button>
-            <label class="stacked-label">
               Invite email
               <input id="inviteEmailInput" autocomplete="email" placeholder="editor@example.com" />
             </label>
@@ -200,10 +235,9 @@
             <button id="createInviteButton" class="secondary-button full-width" type="button">Create Invite</button>
             <label class="stacked-label">
               Invite token
-              <input id="inviteTokenInput" autocomplete="off" placeholder="oji_..." />
+              <input id="inviteTokenInput" autocomplete="off" readonly placeholder="oji_..." />
             </label>
-            <button id="acceptInviteButton" class="secondary-button full-width" type="button">Accept Invite</button>
-            <div id="teamActionOutput" class="dense-output compact-output">Create a user, then add them to this project.</div>
+            <div id="teamActionOutput" class="dense-output compact-output">Invite a teammate by email, then share the generated token.</div>
           </section>
 
           <section id="createPanel" class="panel create-panel hidden">

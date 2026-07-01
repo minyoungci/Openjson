@@ -5,11 +5,16 @@
   const initialParams = new URLSearchParams(window.location.search);
 
   const els = {
+    authScreen: $("authScreen"),
+    projectScreen: $("projectScreen"),
+    workspaceShell: $("workspaceShell"),
     actorId: $("actorIdInput"),
     projectId: $("projectIdInput"),
     token: $("tokenInput"),
     connectionForm: $("connectionForm"),
     copyLinkButton: $("copyLinkButton"),
+    projectSwitcherButton: $("projectSwitcherButton"),
+    projectLogoutButton: $("projectLogoutButton"),
     authName: $("authNameInput"),
     authEmail: $("authEmailInput"),
     authPassword: $("authPasswordInput"),
@@ -17,6 +22,16 @@
     loginButton: $("loginButton"),
     logoutButton: $("logoutButton"),
     authOutput: $("authOutput"),
+    sessionBadge: $("sessionBadge"),
+    projectHomeLabel: $("projectHomeLabel"),
+    workspaceName: $("workspaceNameInput"),
+    projectName: $("projectNameInput"),
+    projectDescription: $("projectDescriptionInput"),
+    createProjectButton: $("createProjectButton"),
+    refreshProjectsButton: $("refreshProjectsButton"),
+    projectList: $("projectList"),
+    projectInviteToken: $("projectInviteTokenInput"),
+    projectSetupOutput: $("projectSetupOutput"),
     projectLabel: $("projectLabel"),
     pathPrefix: $("pathPrefixInput"),
     query: $("queryInput"),
@@ -29,12 +44,6 @@
     zipImportOutput: $("zipImportOutput"),
     refreshTeamButton: $("refreshTeamButton"),
     teamMembersOutput: $("teamMembersOutput"),
-    newUserName: $("newUserNameInput"),
-    newUserEmail: $("newUserEmailInput"),
-    createUserButton: $("createUserButton"),
-    memberUserId: $("memberUserIdInput"),
-    memberRole: $("memberRoleSelect"),
-    addMemberButton: $("addMemberButton"),
     inviteEmail: $("inviteEmailInput"),
     inviteRole: $("inviteRoleSelect"),
     createInviteButton: $("createInviteButton"),
@@ -85,10 +94,15 @@
   };
 
   const state = {
-    actorId: initialParams.get("actor_id") || localStorage.getItem("openjson.actorId") || "user_dev",
-    projectId: initialParams.get("project_id") || localStorage.getItem("openjson.projectId") || "project_dev",
+    actorId: localStorage.getItem("openjson.actorId") || "",
+    projectId: initialParams.get("project_id") || localStorage.getItem("openjson.projectId") || "",
     token: localStorage.getItem("openjson.token") || "",
     refreshToken: localStorage.getItem("openjson.refreshToken") || "",
+    userDisplayName: localStorage.getItem("openjson.userDisplayName") || "",
+    userEmail: localStorage.getItem("openjson.userEmail") || "",
+    workspaces: [],
+    availableProjects: [],
+    projectHomeErrors: [],
     selectedDocumentId: initialParams.get("document_id") || localStorage.getItem("openjson.selectedDocumentId") || "",
     selectedEditorState: null,
     bootstrap: null,
@@ -140,6 +154,8 @@
     els.actorId.value = state.actorId;
     els.projectId.value = state.projectId;
     els.token.value = state.token;
+    els.authName.value = state.userDisplayName;
+    els.authEmail.value = state.userEmail;
     els.autosaveToggle.checked = state.autosaveEnabled;
     els.autoMergeToggle.checked = state.autoMergeEnabled;
     els.liveTextToggle.checked = state.liveTextEnabled;
@@ -152,11 +168,11 @@
     els.query.value = initialParams.get("q") || "";
     const inviteToken = initialParams.get("invite_token");
     if (inviteToken) {
-      els.inviteToken.value = inviteToken;
+      els.projectInviteToken.value = inviteToken;
     }
     bindEvents();
     syncButtons();
-    loadBootstrap(state.selectedDocumentId || null).catch((error) => showGlobalError(error));
+    initializeEntry().catch((error) => showGlobalError(error));
   }
 
   function bindEvents() {
@@ -175,6 +191,30 @@
       copyShareLink().catch((error) => renderError(els.validationPanel, error));
     });
 
+    els.projectSwitcherButton.addEventListener("click", () => {
+      loadProjectHome().catch((error) => renderError(els.projectSetupOutput, error));
+    });
+
+    els.refreshProjectsButton.addEventListener("click", () => {
+      loadProjectHome().catch((error) => renderError(els.projectSetupOutput, error));
+    });
+
+    els.createProjectButton.addEventListener("click", () => {
+      createProjectFromGate().catch((error) => renderError(els.projectSetupOutput, error));
+    });
+
+    els.projectList.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const projectId = target.dataset.openProject;
+      if (!projectId) {
+        return;
+      }
+      openProject(projectId, null).catch((error) => renderError(els.projectSetupOutput, error));
+    });
+
     els.signupButton.addEventListener("click", () => {
       signupWithPassword().catch((error) => renderError(els.authOutput, error));
     });
@@ -185,6 +225,10 @@
 
     els.logoutButton.addEventListener("click", () => {
       logoutSession().catch((error) => renderError(els.authOutput, error));
+    });
+
+    els.projectLogoutButton.addEventListener("click", () => {
+      logoutSession().catch((error) => renderError(els.projectSetupOutput, error));
     });
 
     els.filterButton.addEventListener("click", () => {
@@ -219,36 +263,20 @@
       refreshTeamMembers().catch((error) => renderError(els.teamMembersOutput, error));
     });
 
-    els.createUserButton.addEventListener("click", () => {
-      createLocalUser().catch((error) => renderError(els.teamActionOutput, error));
-    });
-
-    els.addMemberButton.addEventListener("click", () => {
-      addProjectMemberFromPanel().catch((error) => renderError(els.teamActionOutput, error));
-    });
-
     els.createInviteButton.addEventListener("click", () => {
       createProjectInvite().catch((error) => renderError(els.teamActionOutput, error));
     });
 
     els.acceptInviteButton.addEventListener("click", () => {
-      acceptProjectInvite().catch((error) => renderError(els.teamActionOutput, error));
+      acceptProjectInvite().catch((error) => renderError(els.projectSetupOutput, error));
     });
 
     els.inviteToken.addEventListener("input", () => {
       syncButtons();
     });
 
-    els.teamMembersOutput.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) {
-        return;
-      }
-      const actorId = target.dataset.useActor;
-      if (!actorId) {
-        return;
-      }
-      useActor(actorId);
+    els.projectInviteToken.addEventListener("input", () => {
+      syncButtons();
     });
 
     els.newDocumentButton.addEventListener("click", () => {
@@ -376,6 +404,182 @@
     });
   }
 
+  async function initializeEntry() {
+    if (!state.token && state.refreshToken) {
+      await refreshAccessToken();
+    }
+    if (!state.token) {
+      showAuthScreen();
+      return;
+    }
+    await enterAuthenticatedArea();
+  }
+
+  async function enterAuthenticatedArea() {
+    if (state.projectId) {
+      try {
+        await loadBootstrap(state.selectedDocumentId || null);
+        return;
+      } catch (error) {
+        state.projectId = "";
+        state.selectedDocumentId = "";
+        els.projectId.value = "";
+        localStorage.removeItem("openjson.projectId");
+        localStorage.removeItem("openjson.selectedDocumentId");
+        renderError(els.projectSetupOutput, error);
+      }
+    }
+    await loadProjectHome();
+  }
+
+  async function loadProjectHome() {
+    if (!state.token) {
+      showAuthScreen();
+      return;
+    }
+    stopCollaborationLoop();
+    state.loading = true;
+    showProjectScreen();
+    clearPanel(els.projectList, "Loading projects...");
+    syncButtons();
+    try {
+      const workspaceData = await apiFetch("/workspaces");
+      state.workspaces = workspaceData.workspaces || [];
+      state.projectHomeErrors = [];
+      const projectGroups = await Promise.all(
+        state.workspaces.map(async (workspace) => {
+          try {
+            const projectData = await apiFetch(`/workspaces/${encodeURIComponent(workspace.id)}/projects`);
+            return (projectData.projects || []).map((project) => ({ workspace, project }));
+          } catch (error) {
+            state.projectHomeErrors.push(error);
+            return [];
+          }
+        })
+      );
+      state.availableProjects = projectGroups.flat();
+      renderProjectHome();
+    } finally {
+      state.loading = false;
+      syncButtons();
+    }
+  }
+
+  async function createProjectFromGate() {
+    if (!state.token) {
+      showAuthScreen();
+      return;
+    }
+    const workspaceName = els.workspaceName.value.trim();
+    const projectName = els.projectName.value.trim();
+    const description = cleanOptional(els.projectDescription.value);
+    if (!workspaceName || !projectName) {
+      renderText(els.projectSetupOutput, "Workspace name and project name are required.", "error-text");
+      return;
+    }
+    state.loading = true;
+    syncButtons();
+    try {
+      const workspace = await apiFetch("/workspaces", {
+        method: "POST",
+        body: { name: workspaceName },
+      });
+      const project = await apiFetch(`/workspaces/${encodeURIComponent(workspace.id)}/projects`, {
+        method: "POST",
+        body: { name: projectName, description },
+      });
+      els.projectName.value = "";
+      els.projectDescription.value = "";
+      renderText(els.projectSetupOutput, `Created ${project.name}.`, "ok-text");
+      await openProject(project.id, null);
+    } finally {
+      state.loading = false;
+      syncButtons();
+    }
+  }
+
+  async function openProject(projectId, selectedDocumentId) {
+    setProjectId(projectId);
+    if (!selectedDocumentId) {
+      state.selectedDocumentId = "";
+      localStorage.removeItem("openjson.selectedDocumentId");
+    }
+    await loadBootstrap(selectedDocumentId || null);
+  }
+
+  function setProjectId(projectId) {
+    state.projectId = projectId;
+    els.projectId.value = projectId;
+    localStorage.setItem("openjson.projectId", projectId);
+  }
+
+  function showAuthScreen(message) {
+    stopCollaborationLoop();
+    els.authScreen.classList.remove("hidden");
+    els.projectScreen.classList.add("hidden");
+    els.workspaceShell.classList.add("hidden");
+    if (message) {
+      renderText(els.authOutput, message, "muted");
+    }
+    syncAccountLabels();
+  }
+
+  function showProjectScreen(message) {
+    els.authScreen.classList.add("hidden");
+    els.projectScreen.classList.remove("hidden");
+    els.workspaceShell.classList.add("hidden");
+    if (message) {
+      renderText(els.projectSetupOutput, message, "muted");
+    }
+    syncAccountLabels();
+  }
+
+  function showWorkspaceScreen() {
+    els.authScreen.classList.add("hidden");
+    els.projectScreen.classList.add("hidden");
+    els.workspaceShell.classList.remove("hidden");
+    syncAccountLabels();
+  }
+
+  function syncAccountLabels() {
+    const name = state.userDisplayName || els.authName.value.trim();
+    const email = state.userEmail || els.authEmail.value.trim();
+    els.sessionBadge.textContent = name ? `${name}${email ? ` / ${email}` : ""}` : email || "";
+    els.projectHomeLabel.textContent = name ? `${name}'s projects` : "Create a project or open one you already belong to.";
+  }
+
+  function renderProjectHome() {
+    clear(els.projectList);
+    if (!state.availableProjects.length) {
+      renderText(els.projectList, "No projects yet.", "muted");
+    }
+    for (const item of state.availableProjects) {
+      const row = document.createElement("div");
+      row.className = "project-row";
+      const details = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = item.project.name;
+      const meta = document.createElement("span");
+      meta.className = "muted";
+      meta.textContent = `${item.workspace.name} / ${item.project.role || "member"}`;
+      details.append(title, meta);
+      const button = document.createElement("button");
+      button.className = "secondary-button";
+      button.type = "button";
+      button.dataset.openProject = item.project.id;
+      button.textContent = "Open";
+      row.append(details, button);
+      els.projectList.appendChild(row);
+    }
+    if (state.projectHomeErrors.length) {
+      renderText(els.projectSetupOutput, "Some project lists could not be loaded.", "error-text");
+    } else if (state.availableProjects.length) {
+      renderText(els.projectSetupOutput, "Select a project or create a new one.", "muted");
+    } else {
+      renderText(els.projectSetupOutput, "Create your first project to start editing JSON.", "muted");
+    }
+  }
+
   async function signupWithPassword() {
     const displayName = els.authName.value.trim();
     const email = els.authEmail.value.trim();
@@ -395,7 +599,7 @@
     });
     applyAuthenticatedSession(result);
     renderText(els.authOutput, `Signed in as ${result.user.display_name}.`, "ok-text");
-    await loadBootstrap(state.selectedDocumentId || null);
+    await enterAuthenticatedArea();
   }
 
   async function loginWithPassword() {
@@ -415,7 +619,7 @@
     });
     applyAuthenticatedSession(result);
     renderText(els.authOutput, `Signed in as ${result.user.display_name}.`, "ok-text");
-    await loadBootstrap(state.selectedDocumentId || null);
+    await enterAuthenticatedArea();
   }
 
   async function logoutSession() {
@@ -432,34 +636,56 @@
     renderText(els.authOutput, "Signed out.", "muted");
     restartCollaborationLoop();
     syncButtons();
+    showAuthScreen("Signed out.");
   }
 
   function applyAuthenticatedSession(result) {
     state.actorId = result.user.id;
     state.token = result.token;
+    state.userDisplayName = result.user.display_name || "";
+    state.userEmail = result.user.email || "";
     els.actorId.value = state.actorId;
     els.token.value = state.token;
-    els.authName.value = result.user.display_name || "";
-    els.authEmail.value = result.user.email || "";
+    els.authName.value = state.userDisplayName;
+    els.authEmail.value = state.userEmail;
     localStorage.setItem("openjson.actorId", state.actorId);
     localStorage.setItem("openjson.token", state.token);
+    localStorage.setItem("openjson.userDisplayName", state.userDisplayName);
+    localStorage.setItem("openjson.userEmail", state.userEmail);
+    if (!els.workspaceName.value.trim()) {
+      els.workspaceName.value = `${state.userDisplayName || "Team"} Workspace`;
+    }
     if (result.refresh_token) {
       state.refreshToken = result.refresh_token;
       localStorage.setItem("openjson.refreshToken", state.refreshToken);
     }
+    syncAccountLabels();
   }
 
   function clearSessionState() {
+    state.actorId = "";
     state.token = "";
     state.refreshToken = "";
+    state.projectId = "";
+    state.selectedDocumentId = "";
+    state.bootstrap = null;
+    state.selectedEditorState = null;
+    state.projectMembers = [];
+    state.projectSchemas = [];
+    state.availableProjects = [];
     els.token.value = "";
+    els.actorId.value = "";
+    els.projectId.value = "";
     localStorage.removeItem("openjson.token");
     localStorage.removeItem("openjson.refreshToken");
+    localStorage.removeItem("openjson.actorId");
+    localStorage.removeItem("openjson.projectId");
+    localStorage.removeItem("openjson.selectedDocumentId");
   }
 
   async function loadBootstrap(selectedDocumentId) {
     if (!state.projectId) {
-      setEditorStatus("Project id is required.", "error");
+      showProjectScreen("Create or select a project first.");
       return;
     }
     state.loading = true;
@@ -486,6 +712,7 @@
     state.projectMembers = memberData.members;
     state.memberListError = memberData.error;
     state.loading = false;
+    showWorkspaceScreen();
     renderBootstrap(data);
     updateBrowserUrl();
 
@@ -528,42 +755,6 @@
     renderTeamPanel();
   }
 
-  async function createLocalUser() {
-    const displayName = els.newUserName.value.trim();
-    const email = els.newUserEmail.value.trim();
-    if (!displayName || !email) {
-      renderText(els.teamActionOutput, "Display name and email are required.", "error-text");
-      return;
-    }
-    const user = await apiFetch("/users", {
-      method: "POST",
-      body: {
-        display_name: displayName,
-        email,
-      },
-    });
-    els.memberUserId.value = user.id;
-    renderText(els.teamActionOutput, `Created ${user.display_name}. User ID copied below.`, "ok-text");
-  }
-
-  async function addProjectMemberFromPanel() {
-    const userId = els.memberUserId.value.trim();
-    const role = els.memberRole.value;
-    if (!state.projectId || !userId) {
-      renderText(els.teamActionOutput, "Project ID and user ID are required.", "error-text");
-      return;
-    }
-    const member = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/members`, {
-      method: "POST",
-      body: {
-        user_id: userId,
-        role,
-      },
-    });
-    renderText(els.teamActionOutput, `Added ${member.display_name || member.user_id} as ${member.role}.`, "ok-text");
-    await refreshTeamMembers();
-  }
-
   async function createProjectInvite() {
     const email = els.inviteEmail.value.trim();
     const role = els.inviteRole.value;
@@ -583,9 +774,9 @@
   }
 
   async function acceptProjectInvite() {
-    const token = els.inviteToken.value.trim();
+    const token = els.projectInviteToken.value.trim();
     if (!token) {
-      renderText(els.teamActionOutput, "Invite token is required.", "error-text");
+      renderText(els.projectSetupOutput, "Invite token is required.", "error-text");
       return;
     }
     const result = await apiFetch("/invitations/accept", {
@@ -594,18 +785,9 @@
         token,
       },
     });
-    renderText(els.teamActionOutput, `Joined project as ${result.member.role}.`, "ok-text");
-    state.projectId = result.invitation.project_id;
-    els.projectId.value = state.projectId;
-    localStorage.setItem("openjson.projectId", state.projectId);
-    await loadBootstrap(state.selectedDocumentId || null);
-  }
-
-  function useActor(actorId) {
-    state.actorId = actorId;
-    els.actorId.value = actorId;
-    localStorage.setItem("openjson.actorId", actorId);
-    loadBootstrap(state.selectedDocumentId || null).catch((error) => showGlobalError(error));
+    renderText(els.projectSetupOutput, `Joined project as ${result.member.role}.`, "ok-text");
+    els.projectInviteToken.value = "";
+    await openProject(result.invitation.project_id, null);
   }
 
   function buildShareUrl() {
@@ -615,9 +797,6 @@
     }
     if (state.selectedDocumentId) {
       url.searchParams.set("document_id", state.selectedDocumentId);
-    }
-    if (state.actorId && !state.token) {
-      url.searchParams.set("actor_id", state.actorId);
     }
     const pathPrefix = cleanOptional(els.pathPrefix.value);
     const query = cleanOptional(els.query.value);
@@ -688,13 +867,10 @@
       meta.className = "muted";
       meta.textContent = `${member.role} / ${member.email || member.user_id}`;
       details.append(name, meta);
-      const button = document.createElement("button");
-      button.className = "secondary-button";
-      button.type = "button";
-      button.dataset.useActor = member.user_id;
-      button.textContent = member.user_id === state.actorId ? "Current" : "Use";
-      button.disabled = member.user_id === state.actorId;
-      row.append(details, button);
+      const badge = document.createElement("span");
+      badge.className = "member-badge";
+      badge.textContent = member.user_id === state.actorId ? "You" : member.role;
+      row.append(details, badge);
       els.teamMembersOutput.appendChild(row);
     }
   }
@@ -1406,15 +1582,16 @@
     els.signupButton.disabled = busy;
     els.loginButton.disabled = busy;
     els.logoutButton.disabled = busy || !state.token;
+    els.projectLogoutButton.disabled = busy || !state.token;
+    els.refreshProjectsButton.disabled = busy || !state.token;
+    els.createProjectButton.disabled = busy || !state.token;
     els.reloadButton.disabled = busy;
     els.zipSelectButton.disabled = busy;
     els.zipPreviewButton.disabled = busy || !state.zipFile;
     els.zipApplyButton.disabled = busy || !state.zipFile || !state.zipPreview || !state.zipPreview.can_apply;
     els.refreshTeamButton.disabled = busy || !state.projectId;
-    els.createUserButton.disabled = busy;
-    els.addMemberButton.disabled = busy || !state.projectId;
     els.createInviteButton.disabled = busy || !state.projectId;
-    els.acceptInviteButton.disabled = busy || !els.inviteToken.value.trim();
+    els.acceptInviteButton.disabled = busy || !els.projectInviteToken.value.trim();
     els.createDocumentButton.disabled = busy || Boolean(ambiguousSchema);
     els.validateButton.disabled = busy || !hasDoc || !canValidate;
     els.importEditorButton.disabled = busy || !hasDoc || !canPatch;
@@ -1863,6 +2040,7 @@
 
   async function apiFetch(path, options) {
     const method = options && options.method ? options.method : "GET";
+    const includeAuth = !(options && options.auth === false);
     const url = new URL(path, window.location.origin);
     const query = options && options.query ? options.query : {};
     for (const [key, value] of Object.entries(query)) {
@@ -1871,9 +2049,9 @@
       }
     }
     const headers = { Accept: "application/json" };
-    if (state.token) {
+    if (includeAuth && state.token) {
       headers.Authorization = `Bearer ${state.token}`;
-    } else if (state.actorId) {
+    } else if (includeAuth && state.actorId) {
       headers["X-Actor-Id"] = state.actorId;
     }
     const init = { method, headers };

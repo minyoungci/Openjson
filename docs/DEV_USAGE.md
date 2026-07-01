@@ -22,6 +22,10 @@ Local editor shell:
 - http://127.0.0.1:8000/
 - http://127.0.0.1:8000/app
 
+User-facing login, project creation, save, realtime checkpoint, and memo flow:
+
+- `docs/USER_WORKFLOW.md`
+
 ## Initialize DB
 
 The app initializes the SQLite schema on startup. You can also initialize it
