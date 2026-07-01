@@ -446,6 +446,11 @@ the document mutation transaction commits, the API derives a fresh
 payloads are operational notifications only; they do not persist new canonical
 state and they are skipped for failed or preview-only mutations.
 
+TASK_142 comment-thread WebSocket notifications also add no table. Comment
+creation, replies, resolve, and reopen still persist only in `comment_threads`
+and append-only `comments`; the WebSocket payload only tells active clients to
+reload the document comment thread list.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

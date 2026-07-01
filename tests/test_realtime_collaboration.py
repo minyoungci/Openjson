@@ -12,6 +12,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from app.comment_service import create_comment_thread
 from app.database import connect, init_db, utc_now
 from app.document_service import create_document, patch_document
 from app.errors import AppError, ErrorCode
@@ -236,6 +237,59 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertEqual(message["state"]["current_version"], 3)
         self.assertEqual(message["state"]["checkpoints"][0]["event_id"], response.json()["event_id"])
         self.assertEqual(message["state"]["checkpoints"][0]["event_type"], "rollback")
+
+    def test_comment_thread_endpoint_broadcasts_comment_update(self) -> None:
+        with self.client.websocket_connect(self._ws_path(self.owner_id)) as websocket:
+            websocket.receive_json()
+            response = self.client.post(
+                f"/documents/{self.document['id']}/comment-threads",
+                headers={"X-Actor-Id": self.editor_id},
+                json={"body": "Check this setting", "anchor_type": "path", "path": "/learning_rate"},
+            )
+            message = websocket.receive_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(message["type"], "comment_threads.updated")
+        self.assertEqual(message["reason"], "comment_thread.created")
+        self.assertEqual(message["document_id"], self.document["id"])
+        self.assertEqual(message["thread_id"], response.json()["id"])
+        self.assertEqual(message["status"], "open")
+
+    def test_comment_reply_and_resolve_endpoints_broadcast_comment_updates(self) -> None:
+        thread = create_comment_thread(
+            self.db_path,
+            document_id=self.document["id"],
+            actor_id=self.owner_id,
+            body="Initial note",
+            anchor_type="document",
+        )
+
+        with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:
+            websocket.receive_json()
+            reply = self.client.post(
+                f"/comment-threads/{thread['id']}/comments",
+                headers={"X-Actor-Id": self.editor_id},
+                json={"body": "Reply from editor"},
+            )
+            reply_message = websocket.receive_json()
+            resolved = self.client.post(
+                f"/comment-threads/{thread['id']}/resolve",
+                headers={"X-Actor-Id": self.owner_id},
+            )
+            resolve_message = websocket.receive_json()
+
+        self.assertEqual(reply.status_code, 200)
+        self.assertEqual(reply_message["type"], "comment_threads.updated")
+        self.assertEqual(reply_message["reason"], "comment.added")
+        self.assertEqual(reply_message["document_id"], self.document["id"])
+        self.assertEqual(reply_message["thread_id"], thread["id"])
+        self.assertEqual(reply_message["comment_id"], reply.json()["id"])
+        self.assertEqual(resolved.status_code, 200)
+        self.assertEqual(resolve_message["type"], "comment_threads.updated")
+        self.assertEqual(resolve_message["reason"], "comment_thread.resolved")
+        self.assertEqual(resolve_message["document_id"], self.document["id"])
+        self.assertEqual(resolve_message["thread_id"], thread["id"])
+        self.assertEqual(resolve_message["status"], "resolved")
 
     def test_viewer_editing_presence_is_rejected_and_closed(self) -> None:
         with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:

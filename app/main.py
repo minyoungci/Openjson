@@ -31,7 +31,7 @@ from app.auth_service import (
     signup_with_password,
 )
 from app.backup_scheduler import BackupScheduler, backup_scheduler_config_from_env
-from app.database import DEFAULT_DB_PATH, init_db
+from app.database import DEFAULT_DB_PATH, connect, init_db
 from app.comment_service import (
     add_comment,
     create_comment_thread,
@@ -195,6 +195,33 @@ async def _broadcast_document_mutation_checkpoint(
     except AppError:
         return
     await collaboration_hub.broadcast_state(document_id, state, reason=reason)
+
+
+def _comment_thread_document_id(db_path: str, thread_id: str) -> str | None:
+    with connect(db_path) as conn:
+        row = conn.execute("SELECT document_id FROM comment_threads WHERE id = ?", (thread_id,)).fetchone()
+        return row["document_id"] if row is not None else None
+
+
+async def _broadcast_comment_threads_updated(
+    *,
+    document_id: str,
+    thread_id: str,
+    reason: str,
+    comment_id: str | None = None,
+    status: str | None = None,
+) -> None:
+    payload = {
+        "type": "comment_threads.updated",
+        "document_id": document_id,
+        "thread_id": thread_id,
+        "reason": reason,
+    }
+    if comment_id is not None:
+        payload["comment_id"] = comment_id
+    if status is not None:
+        payload["status"] = status
+    await collaboration_hub.broadcast(document_id, payload)
 
 
 def _unexpected_error_details(request: Request | None, exc: Exception, *, debug: bool) -> dict:
@@ -1427,12 +1454,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
         return validate_document(application.state.db_path, document_id, actor_id=actor_id)
 
     @application.post("/documents/{document_id}/comment-threads")
-    def create_comment_thread_endpoint(
+    async def create_comment_thread_endpoint(
         document_id: str,
         request: CreateCommentThreadRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return create_comment_thread(
+        thread = create_comment_thread(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
@@ -1441,31 +1468,61 @@ def create_app(db_path: str | None = None) -> FastAPI:
             path=request.path,
             event_id=request.event_id,
         )
+        await _broadcast_comment_threads_updated(
+            document_id=document_id,
+            thread_id=thread["id"],
+            reason="comment_thread.created",
+            status=thread["status"],
+        )
+        return thread
 
     @application.get("/documents/{document_id}/comment-threads")
     def list_comment_threads_endpoint(document_id: str, actor_id: ActorHeader = None) -> dict:
         return list_comment_threads(application.state.db_path, document_id=document_id, actor_id=actor_id)
 
     @application.post("/comment-threads/{thread_id}/comments")
-    def add_comment_endpoint(
+    async def add_comment_endpoint(
         thread_id: str,
         request: AddCommentRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return add_comment(
+        comment = add_comment(
             application.state.db_path,
             thread_id=thread_id,
             actor_id=actor_id,
             body=request.body,
         )
+        document_id = _comment_thread_document_id(application.state.db_path, thread_id)
+        if document_id is not None:
+            await _broadcast_comment_threads_updated(
+                document_id=document_id,
+                thread_id=thread_id,
+                reason="comment.added",
+                comment_id=comment["id"],
+            )
+        return comment
 
     @application.post("/comment-threads/{thread_id}/resolve")
-    def resolve_comment_thread_endpoint(thread_id: str, actor_id: ActorHeader = None) -> dict:
-        return resolve_comment_thread(application.state.db_path, thread_id=thread_id, actor_id=actor_id)
+    async def resolve_comment_thread_endpoint(thread_id: str, actor_id: ActorHeader = None) -> dict:
+        thread = resolve_comment_thread(application.state.db_path, thread_id=thread_id, actor_id=actor_id)
+        await _broadcast_comment_threads_updated(
+            document_id=thread["document_id"],
+            thread_id=thread_id,
+            reason="comment_thread.resolved",
+            status=thread["status"],
+        )
+        return thread
 
     @application.post("/comment-threads/{thread_id}/reopen")
-    def reopen_comment_thread_endpoint(thread_id: str, actor_id: ActorHeader = None) -> dict:
-        return reopen_comment_thread(application.state.db_path, thread_id=thread_id, actor_id=actor_id)
+    async def reopen_comment_thread_endpoint(thread_id: str, actor_id: ActorHeader = None) -> dict:
+        thread = reopen_comment_thread(application.state.db_path, thread_id=thread_id, actor_id=actor_id)
+        await _broadcast_comment_threads_updated(
+            document_id=thread["document_id"],
+            thread_id=thread_id,
+            reason="comment_thread.reopened",
+            status=thread["status"],
+        )
+        return thread
 
     @application.post("/projects/{project_id}/review-requests")
     def create_review_request_endpoint(

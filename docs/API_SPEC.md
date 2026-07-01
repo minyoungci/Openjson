@@ -183,6 +183,7 @@ See `docs/TASK_140_PLAN.md` for resetting stale live-text sessions when the
 canonical document version changes outside the transient text session.
 See `docs/TASK_141_PLAN.md` for automatic WebSocket checkpoint broadcasts after
 accepted HTTP document mutations.
+See `docs/TASK_142_PLAN.md` for WebSocket comment-thread update notifications.
 
 ## Deployment Version
 
@@ -554,6 +555,13 @@ local editor buffer should preserve that buffer and re-diff it against the
 returned authoritative session text. Text operations sent from the old session
 after such a reset return `VERSION_CONFLICT` when their `base_text_revision` is
 ahead of the reset session revision.
+Comment thread creation, replies, resolve, and reopen send
+`comment_threads.updated` over the same document WebSocket channel. The payload
+contains `document_id`, `thread_id`, `reason`, and optional `comment_id` or
+`status`; clients should reload
+`GET /documents/{document_id}/comment-threads` for the selected document. These
+notifications are operational only and do not create document events or mutate
+JSON snapshots.
 
 Offline sync accepts a batch of queued client content-save operations:
 

@@ -1458,6 +1458,14 @@
     renderCommentThreads();
   }
 
+  async function applyCommentThreadsUpdated(payload) {
+    if (!payload || payload.document_id !== state.selectedDocumentId) {
+      return;
+    }
+    await loadCommentThreads();
+    setEditorStatus("Notes updated.", "info");
+  }
+
   async function createCommentThread() {
     if (!state.selectedDocumentId) {
       return;
@@ -1748,6 +1756,8 @@
       }
       if (payload.type === "collaboration_state" && payload.state) {
         applyCollaborationState(payload.state).catch((error) => renderError(els.collaborationPanel, error));
+      } else if (payload.type === "comment_threads.updated") {
+        applyCommentThreadsUpdated(payload).catch((error) => renderError(els.commentsPanel, error));
       } else if (payload.type === "error" && payload.error) {
         markLiveTextOperationUnacknowledged();
         renderErrorObject(els.collaborationPanel, payload.error);
