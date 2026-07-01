@@ -179,6 +179,7 @@
     liveTextNeedsResync: false,
     liveTextClientId: localStorage.getItem("openjson.liveTextClientId") || "",
     offlineQueue: readOfflineQueue(),
+    offlineSyncRequestId: 0,
     saveRequestId: 0,
     rollbackRequestId: 0,
     saving: false,
@@ -186,6 +187,7 @@
     authenticating: false,
     loggingOut: false,
     refreshingSession: false,
+    syncingOffline: false,
     creatingProject: false,
     creatingInvite: false,
     acceptingInvite: false,
@@ -604,6 +606,7 @@
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
+    invalidateOfflineSyncRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
@@ -739,6 +742,7 @@
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
+    invalidateOfflineSyncRequests();
     resetZipImportSelection("No ZIP selected.");
     setProjectId(projectId);
     if (!selectedDocumentId) {
@@ -1045,6 +1049,7 @@
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
+    invalidateOfflineSyncRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
@@ -1134,6 +1139,7 @@
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
+    invalidateOfflineSyncRequests();
     state.loading = true;
     syncButtons();
     const params = {
@@ -1654,6 +1660,7 @@
     if (state.selectedDocumentId && state.selectedDocumentId !== editorState.document.id) {
       invalidateSaveRequests();
       invalidateRollbackRequests();
+      invalidateOfflineSyncRequests();
       invalidateCreateDocumentRequests();
       invalidateCreateFileImportRequests();
       invalidateEditorFileImportRequests();
@@ -1700,6 +1707,7 @@
     invalidateDocumentPanelRequests();
     invalidateSaveRequests();
     invalidateRollbackRequests();
+    invalidateOfflineSyncRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
     invalidateCreateFileImportRequests();
@@ -4077,29 +4085,71 @@
   }
 
   async function flushOfflineQueue() {
-    if (!state.projectId || !state.offlineQueue.length) {
+    const projectId = state.projectId;
+    const selectedDocumentId = state.selectedDocumentId || "";
+    const sessionUserId = state.userId;
+    if (!projectId || !sessionUserId || !state.offlineQueue.length || state.syncingOffline) {
       return;
     }
-    const result = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/offline-sync`, {
-      method: "POST",
-      body: {
-        items: state.offlineQueue,
-      },
-    });
+    const queueItems = state.offlineQueue.slice();
+    const queueItemIds = queueItems.map((item) => item.client_operation_id);
+    const requestId = state.offlineSyncRequestId + 1;
+    state.offlineSyncRequestId = requestId;
+    state.syncingOffline = true;
+    syncButtons();
+    let result;
+    try {
+      result = await apiFetch(`/projects/${encodeURIComponent(projectId)}/offline-sync`, {
+        method: "POST",
+        body: {
+          items: queueItems,
+        },
+      });
+    } catch (error) {
+      if (!isCurrentOfflineSyncRequest(requestId, sessionUserId, projectId, selectedDocumentId, queueItemIds)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.offlineSyncRequestId === requestId) {
+        state.syncingOffline = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentOfflineSyncRequest(requestId, sessionUserId, projectId, selectedDocumentId, queueItemIds)) {
+      return;
+    }
     const unresolved = new Set(
       result.results
         .filter((item) => item.status === "conflict")
         .map((item) => item.client_operation_id)
     );
-    state.offlineQueue = state.offlineQueue.filter((item) => unresolved.has(item.client_operation_id));
+    const submitted = new Set(queueItemIds);
+    state.offlineQueue = state.offlineQueue.filter(
+      (item) => !submitted.has(item.client_operation_id) || unresolved.has(item.client_operation_id)
+    );
     writeOfflineQueue();
+    syncButtons();
     setEditorStatus(
       `Offline sync applied ${result.summary.applied}, conflicts ${result.summary.conflict}, failed ${result.summary.failed}.`,
       result.summary.conflict || result.summary.failed ? "error" : "ok",
     );
-    if (state.selectedDocumentId) {
-      await loadBootstrap(state.selectedDocumentId);
+    if (selectedDocumentId) {
+      await loadBootstrap(selectedDocumentId);
     }
+  }
+
+  function isCurrentOfflineSyncRequest(requestId, sessionUserId, projectId, selectedDocumentId, queueItemIds) {
+    if (
+      state.offlineSyncRequestId !== requestId ||
+      state.userId !== sessionUserId ||
+      state.projectId !== projectId ||
+      (state.selectedDocumentId || "") !== selectedDocumentId
+    ) {
+      return false;
+    }
+    const liveQueueIds = new Set(state.offlineQueue.map((item) => item.client_operation_id));
+    return queueItemIds.every((itemId) => liveQueueIds.has(itemId));
   }
 
   function readOfflineQueue() {
@@ -4113,6 +4163,12 @@
 
   function writeOfflineQueue() {
     localStorage.setItem("openjson.offlineQueue", JSON.stringify(state.offlineQueue));
+  }
+
+  function invalidateOfflineSyncRequests() {
+    state.offlineSyncRequestId += 1;
+    state.syncingOffline = false;
+    syncButtons();
   }
 
   async function apiFetchBinary(path, options) {

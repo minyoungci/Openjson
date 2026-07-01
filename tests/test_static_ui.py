@@ -246,6 +246,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("state.authenticating", js.text)
         self.assertIn("state.loggingOut", js.text)
         self.assertIn("state.refreshingSession", js.text)
+        self.assertIn("state.syncingOffline", js.text)
         self.assertIn("state.creatingProject", js.text)
         self.assertIn("state.creatingInvite", js.text)
         self.assertIn("state.acceptingInvite", js.text)
@@ -254,6 +255,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("state.logoutRequestId", js.text)
         self.assertIn("state.sessionRefreshRequestId", js.text)
         self.assertIn("state.sessionRefreshPromise", js.text)
+        self.assertIn("state.offlineSyncRequestId", js.text)
         self.assertIn("state.createFileImportRequestId", js.text)
         self.assertIn("state.editorFileImportRequestId", js.text)
         self.assertIn("state.projectInviteAcceptRequestId", js.text)
@@ -460,6 +462,37 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("Live text change is still syncing.", js.text)
         self.assertIn("Syncing latest live text before commit.", js.text)
         self.assertIn("flushOfflineQueue", js.text)
+        offline_sync_loader = js.text.split("async function flushOfflineQueue()", 1)[1].split(
+            "function isCurrentOfflineSyncRequest", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", offline_sync_loader)
+        self.assertIn("const selectedDocumentId = state.selectedDocumentId || \"\"", offline_sync_loader)
+        self.assertIn("const sessionUserId = state.userId", offline_sync_loader)
+        self.assertIn("state.syncingOffline", offline_sync_loader)
+        self.assertIn("const queueItems = state.offlineQueue.slice()", offline_sync_loader)
+        self.assertIn("const queueItemIds = queueItems.map((item) => item.client_operation_id)", offline_sync_loader)
+        self.assertIn("const requestId = state.offlineSyncRequestId + 1", offline_sync_loader)
+        self.assertIn("state.offlineSyncRequestId = requestId", offline_sync_loader)
+        self.assertIn("state.syncingOffline = true", offline_sync_loader)
+        self.assertIn("/projects/${encodeURIComponent(projectId)}/offline-sync", offline_sync_loader)
+        self.assertIn("items: queueItems", offline_sync_loader)
+        self.assertIn("if (!isCurrentOfflineSyncRequest(requestId, sessionUserId, projectId, selectedDocumentId, queueItemIds))", offline_sync_loader)
+        self.assertIn("const submitted = new Set(queueItemIds)", offline_sync_loader)
+        self.assertIn("!submitted.has(item.client_operation_id) || unresolved.has(item.client_operation_id)", offline_sync_loader)
+        self.assertIn("await loadBootstrap(selectedDocumentId)", offline_sync_loader)
+        self.assertIn(
+            "function isCurrentOfflineSyncRequest(requestId, sessionUserId, projectId, selectedDocumentId, queueItemIds)",
+            js.text,
+        )
+        self.assertIn("state.offlineSyncRequestId !== requestId", js.text)
+        self.assertIn("state.userId !== sessionUserId", js.text)
+        self.assertIn("state.projectId !== projectId", js.text)
+        self.assertIn("(state.selectedDocumentId || \"\") !== selectedDocumentId", js.text)
+        self.assertIn("const liveQueueIds = new Set(state.offlineQueue.map((item) => item.client_operation_id))", js.text)
+        self.assertIn("return queueItemIds.every((itemId) => liveQueueIds.has(itemId))", js.text)
+        self.assertIn("function invalidateOfflineSyncRequests()", js.text)
+        self.assertIn("state.offlineSyncRequestId += 1", js.text)
+        self.assertIn("state.syncingOffline = false", js.text)
         self.assertIn("Autosaved from OpenJson UI", js.text)
         validation_loader = js.text.split("async function validateSelected()", 1)[1].split(
             "async function previewSelected", 1
@@ -555,6 +588,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("state.selectedDocumentId !== editorState.document.id", editor_state_setter)
         self.assertIn("invalidateSaveRequests()", editor_state_setter)
         self.assertIn("invalidateRollbackRequests()", editor_state_setter)
+        self.assertIn("invalidateOfflineSyncRequests()", editor_state_setter)
         self.assertIn("invalidateCreateDocumentRequests()", editor_state_setter)
         self.assertIn("invalidateCreateFileImportRequests()", editor_state_setter)
         self.assertIn("invalidateEditorFileImportRequests()", editor_state_setter)
@@ -614,6 +648,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateEditorFileImportRequests()", bootstrap_loader)
         self.assertIn("invalidateProjectInviteRequests()", bootstrap_loader)
         self.assertIn("invalidateProjectInviteAcceptRequests()", bootstrap_loader)
+        self.assertIn("invalidateOfflineSyncRequests()", bootstrap_loader)
         self.assertIn("/projects/${encodeURIComponent(projectId)}/editor-bootstrap", bootstrap_loader)
         self.assertIn("fetchProjectSchemasSafe(projectId, requestId)", bootstrap_loader)
         self.assertIn("fetchProjectMembersSafe(projectId, requestId)", bootstrap_loader)
@@ -660,6 +695,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateCreateDocumentRequests()", project_home_loader)
         self.assertIn("invalidateProjectInviteRequests()", project_home_loader)
         self.assertIn("invalidateProjectInviteAcceptRequests()", project_home_loader)
+        self.assertIn("invalidateOfflineSyncRequests()", project_home_loader)
         self.assertIn("stopCollaborationLoop()", project_home_loader)
         self.assertIn("stopProjectWorkspaceSocket()", project_home_loader)
         self.assertIn("if (!isCurrentProjectHomeRequest(requestId))", project_home_loader)
@@ -681,6 +717,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateEditorFileImportRequests()", project_opener)
         self.assertIn("invalidateProjectInviteRequests()", project_opener)
         self.assertIn("invalidateProjectInviteAcceptRequests()", project_opener)
+        self.assertIn("invalidateOfflineSyncRequests()", project_opener)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', project_opener)
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", session_clearer)
@@ -695,6 +732,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateEditorFileImportRequests()", session_clearer)
         self.assertIn("invalidateProjectInviteRequests()", session_clearer)
         self.assertIn("invalidateProjectInviteAcceptRequests()", session_clearer)
+        self.assertIn("invalidateOfflineSyncRequests()", session_clearer)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1

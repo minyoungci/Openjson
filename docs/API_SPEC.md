@@ -259,6 +259,9 @@ changes, or session clearing.
 See `docs/TASK_174_PLAN.md` for guarding stale browser bootstrap child
 responses for schemas, team members, and project usage after project switches
 or overlapping bootstrap loads.
+See `docs/TASK_175_PLAN.md` for guarding stale browser offline-sync responses
+after project switches, document switches, session changes, or overlapping
+offline queue flushes.
 
 ## Deployment Version
 
@@ -754,6 +757,12 @@ members, and project usage are accepted only when they still match the active
 bootstrap request id and project id. Stale child responses return a non-fatal
 stale marker and are not used to populate project schemas, team members, or
 usage chips.
+Offline-sync responses in the static browser are applied only when they still
+match the latest offline-sync request id, captured session user id, project id,
+selected document id, and queued item ids. The browser submits a snapshot of
+the queue taken at request start, keeps items added after the request started,
+and ignores stale successes or failures instead of clearing the queue, showing
+stale sync status, or reloading the wrong document.
 Project-creation responses in the static browser are applied only when they
 still match the latest create request, captured actor id, visible create panel,
 workspace name input, project name input, and project description input.

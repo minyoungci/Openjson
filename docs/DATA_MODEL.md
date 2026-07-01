@@ -600,6 +600,12 @@ browser client passes bootstrap request ids into schema, member, and usage
 helper fetches and ignores stale child results before they can populate browser
 state. This does not alter schema, membership, usage, permission, canonical
 snapshot, or append-only `document_events` storage.
+TASK_175 stale browser offline-sync response guarding also adds no table. The
+static browser client tracks offline-sync request ids and captured queue,
+session, project, and document context before applying offline-sync responses
+to local browser queue state. This does not alter backend offline-sync
+idempotency, permissions, canonical snapshots, or append-only
+`document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and
