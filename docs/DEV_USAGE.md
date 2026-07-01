@@ -63,7 +63,7 @@ Deployment smoke endpoints:
 when `database.migrations.status` is `ok`; pending or drifted migrations return
 HTTP 503 with the standard error envelope.
 
-Optional local HTTP rate limit:
+Optional local usage limits:
 
 ```powershell
 $env:OPENJSON_RATE_LIMIT_ENABLED = "1"
@@ -72,12 +72,15 @@ $env:OPENJSON_RATE_LIMIT_WINDOW_SECONDS = "60"
 $env:OPENJSON_WS_RATE_LIMIT_ENABLED = "1"
 $env:OPENJSON_WS_RATE_LIMIT_MESSAGES = "120"
 $env:OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS = "60"
+$env:OPENJSON_REQUEST_BODY_LIMIT_ENABLED = "1"
+$env:OPENJSON_MAX_REQUEST_BODY_BYTES = "10485760"
 ```
 
 Limited requests return `RATE_LIMITED` with HTTP 429. `/health`, `/ready`, and
 `OPTIONS` are exempt.
 Limited WebSocket collaboration connections receive a structured
 `RATE_LIMITED` error payload and then close.
+Oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE` with HTTP 413.
 
 ## Operational Smoke Commands
 

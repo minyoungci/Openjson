@@ -39,3 +39,7 @@ services:
         value: "120"
       - key: OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS
         value: "60"
+      - key: OPENJSON_REQUEST_BODY_LIMIT_ENABLED
+        value: "1"
+      - key: OPENJSON_MAX_REQUEST_BODY_BYTES
+        value: "10485760"

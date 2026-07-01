@@ -68,6 +68,10 @@ See `docs/MIGRATIONS_BASELINE.md` for the SQLite MVP migration ledger policy.
   to `120`.
 - `OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS`: fixed window size in seconds.
   Defaults to `60`.
+- `OPENJSON_REQUEST_BODY_LIMIT_ENABLED`: set to `1`, `true`, or `yes` to
+  reject oversized HTTP request bodies before endpoint parsing.
+- `OPENJSON_MAX_REQUEST_BODY_BYTES`: maximum accepted HTTP request body size.
+  Defaults to `10485760`.
 
 Example:
 
@@ -76,6 +80,7 @@ $env:OPENJSON_DB_PATH = "D:\OpenJson\openjson.sqlite3"
 $env:OPENJSON_CORS_ORIGINS = "http://localhost:3000"
 $env:OPENJSON_RATE_LIMIT_ENABLED = "1"
 $env:OPENJSON_WS_RATE_LIMIT_ENABLED = "1"
+$env:OPENJSON_REQUEST_BODY_LIMIT_ENABLED = "1"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 

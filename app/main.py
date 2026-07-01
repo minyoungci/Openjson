@@ -82,6 +82,7 @@ from app.rate_limit import (
     rate_limit_config_from_env,
     websocket_rate_limit_config_from_env,
 )
+from app.request_body_limit import configure_request_body_limiting, request_body_limit_config_from_env
 from app.realtime_service import collaboration_hub, invalid_realtime_message, websocket_error_payload
 from app.review_service import (
     apply_review_request,
@@ -197,6 +198,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
         messages_raw=os.environ.get("OPENJSON_WS_RATE_LIMIT_MESSAGES"),
         window_seconds_raw=os.environ.get("OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS"),
     )
+    request_body_limit_config = request_body_limit_config_from_env(
+        enabled_raw=os.environ.get("OPENJSON_REQUEST_BODY_LIMIT_ENABLED"),
+        max_bytes_raw=os.environ.get("OPENJSON_MAX_REQUEST_BODY_BYTES"),
+    )
+    configure_request_body_limiting(application, config=request_body_limit_config)
     configure_rate_limiting(application, config=rate_limit_config)
     configure_request_observability(
         application,
@@ -260,6 +266,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             cors_origins_configured=application.state.cors_origins_configured,
             rate_limit_config=application.state.rate_limit_config,
             websocket_rate_limit_config=application.state.websocket_rate_limit_config,
+            request_body_limit_config=application.state.request_body_limit_config,
         )
 
     @application.get("/ready")

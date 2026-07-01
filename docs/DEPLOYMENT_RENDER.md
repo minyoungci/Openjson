@@ -80,6 +80,8 @@ OPENJSON_RATE_LIMIT_WINDOW_SECONDS=60
 OPENJSON_WS_RATE_LIMIT_ENABLED=1
 OPENJSON_WS_RATE_LIMIT_MESSAGES=120
 OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS=60
+OPENJSON_REQUEST_BODY_LIMIT_ENABLED=1
+OPENJSON_MAX_REQUEST_BODY_BYTES=10485760
 ```
 
 `OPENJSON_ALLOW_ACTOR_HEADER=0` disables the development-only actor id fallback
@@ -94,6 +96,9 @@ checks keep working. This is not a replacement for Cloudflare abuse controls;
 keep Cloudflare proxied on the public domain before broader sharing.
 WebSocket collaboration also has a separate per-connection message limit.
 Limited sockets receive a structured `RATE_LIMITED` payload and close.
+Oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE` with HTTP 413
+before endpoint handlers parse or mutate application data. The default Render
+limit is 10 MiB, matching the current ZIP archive limit.
 
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
@@ -166,7 +171,8 @@ persistent database before treating the deploy as live.
 `RENDER_GIT_COMMIT` default environment variable and
 `runtime_config.actor_header_allowed=false`. It should also show
 `runtime_config.rate_limit_enabled=true` and
-`runtime_config.websocket_rate_limit_enabled=true`.
+`runtime_config.websocket_rate_limit_enabled=true`, plus
+`runtime_config.request_body_limit_enabled=true`.
 
 You can run the deployment status smoke from this repo:
 

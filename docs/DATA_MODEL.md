@@ -313,6 +313,10 @@ TASK_117 WebSocket message limiting adds no table. It is in-memory
 per-connection operational state and does not mutate `editor_presence`,
 `document_events`, snapshots, audit rows, or text collaboration sessions.
 
+TASK_118 HTTP request body limiting also adds no table. It is request-time
+operational enforcement before endpoint parsing and must reject oversized
+requests before document, event, audit, auth, or import mutations occur.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

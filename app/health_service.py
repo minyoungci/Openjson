@@ -6,6 +6,7 @@ from typing import Any
 from app.database import connect, get_schema_migration_status
 from app.errors import AppError, ErrorCode
 from app.rate_limit import RateLimitConfig
+from app.request_body_limit import RequestBodyLimitConfig
 
 
 REQUIRED_TABLES = {
@@ -48,6 +49,7 @@ def version_status(
     cors_origins_configured: bool,
     rate_limit_config: RateLimitConfig,
     websocket_rate_limit_config: RateLimitConfig,
+    request_body_limit_config: RequestBodyLimitConfig,
 ) -> dict[str, Any]:
     return {
         "service": "openjson-api",
@@ -72,6 +74,8 @@ def version_status(
             "websocket_rate_limit_enabled": websocket_rate_limit_config.enabled,
             "websocket_rate_limit_messages": websocket_rate_limit_config.requests,
             "websocket_rate_limit_window_seconds": websocket_rate_limit_config.window_seconds,
+            "request_body_limit_enabled": request_body_limit_config.enabled,
+            "max_request_body_bytes": request_body_limit_config.max_bytes,
             "redis_fanout_enabled": bool(_optional_env("OPENJSON_REDIS_URL")),
             "oidc_configured": all(
                 _optional_env(name)

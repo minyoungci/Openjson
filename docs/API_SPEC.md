@@ -145,6 +145,7 @@ See `docs/TASK_114_PLAN.md` for the public deployment version surface.
 See `docs/TASK_115_PLAN.md` for the readiness migration gate.
 See `docs/TASK_116_PLAN.md` for the HTTP rate limit guard.
 See `docs/TASK_117_PLAN.md` for the WebSocket message rate limit guard.
+See `docs/TASK_118_PLAN.md` for the HTTP request body size guard.
 
 ## Deployment Version
 
@@ -168,6 +169,11 @@ It may include non-secret rate-limit flags:
 - `runtime_config.websocket_rate_limit_enabled`
 - `runtime_config.websocket_rate_limit_messages`
 - `runtime_config.websocket_rate_limit_window_seconds`
+- `runtime_config.request_body_limit_enabled`
+- `runtime_config.max_request_body_bytes`
+
+When enabled, oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE`
+with HTTP 413 before endpoint handlers parse or mutate application data.
 
 ## Deployment Readiness
 

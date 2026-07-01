@@ -16,6 +16,7 @@ from app.errors import AppError, ErrorCode
 from app.health_service import readiness_status, version_status
 from app.main import create_app
 from app.rate_limit import RateLimitConfig
+from app.request_body_limit import RequestBodyLimitConfig
 from scripts.smoke_deployment_status import run_deployment_status_smoke
 
 
@@ -39,6 +40,8 @@ class DeploymentHardeningTests(unittest.TestCase):
         os.environ.pop("OPENJSON_WS_RATE_LIMIT_ENABLED", None)
         os.environ.pop("OPENJSON_WS_RATE_LIMIT_MESSAGES", None)
         os.environ.pop("OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS", None)
+        os.environ.pop("OPENJSON_REQUEST_BODY_LIMIT_ENABLED", None)
+        os.environ.pop("OPENJSON_MAX_REQUEST_BODY_BYTES", None)
 
     def _counts(self) -> dict[str, int]:
         from app.database import connect
@@ -90,6 +93,8 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertFalse(version.json()["runtime_config"]["websocket_rate_limit_enabled"])
         self.assertEqual(version.json()["runtime_config"]["websocket_rate_limit_messages"], 120)
         self.assertEqual(version.json()["runtime_config"]["websocket_rate_limit_window_seconds"], 60)
+        self.assertFalse(version.json()["runtime_config"]["request_body_limit_enabled"])
+        self.assertEqual(version.json()["runtime_config"]["max_request_body_bytes"], 10 * 1024 * 1024)
         self.assertNotIn("do-not-leak", json.dumps(version.json()))
         self.assertEqual(ready.status_code, 200)
         self.assertEqual(ready.json()["status"], "ready")
@@ -133,6 +138,7 @@ class DeploymentHardeningTests(unittest.TestCase):
                 cors_origins_configured=False,
                 rate_limit_config=RateLimitConfig(enabled=True, requests=77, window_seconds=30),
                 websocket_rate_limit_config=RateLimitConfig(enabled=True, requests=33, window_seconds=20),
+                request_body_limit_config=RequestBodyLimitConfig(enabled=True, max_bytes=4096),
             )
 
         self.assertEqual(payload["source"]["git_commit"], "explicit-sha")
@@ -145,6 +151,8 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertTrue(payload["runtime_config"]["websocket_rate_limit_enabled"])
         self.assertEqual(payload["runtime_config"]["websocket_rate_limit_messages"], 33)
         self.assertEqual(payload["runtime_config"]["websocket_rate_limit_window_seconds"], 20)
+        self.assertTrue(payload["runtime_config"]["request_body_limit_enabled"])
+        self.assertEqual(payload["runtime_config"]["max_request_body_bytes"], 4096)
         self.assertTrue(payload["runtime_config"]["redis_fanout_enabled"])
         self.assertTrue(payload["runtime_config"]["oidc_configured"])
         self.assertNotIn("secret", json.dumps(payload))
@@ -201,6 +209,30 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual([response.status_code for response in ready_responses], [200, 200, 200])
         self.assertEqual(first_version.status_code, 200)
         self.assertEqual(second_version.status_code, 429)
+
+    def test_request_body_limit_returns_standard_error_before_mutation(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "OPENJSON_REQUEST_BODY_LIMIT_ENABLED": "1",
+                "OPENJSON_MAX_REQUEST_BODY_BYTES": "32",
+            },
+            clear=False,
+        ):
+            client = TestClient(create_app(self.db_path))
+            response = client.post(
+                "/users",
+                json={
+                    "id": "user_large",
+                    "email": "large@example.com",
+                    "display_name": "Body Limit User",
+                },
+            )
+
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.json()["error"]["code"], ErrorCode.REQUEST_BODY_TOO_LARGE)
+        self.assertEqual(response.json()["error"]["details"]["max_request_body_bytes"], 32)
+        self.assertEqual(self._counts(), {"documents": 0, "events": 0})
 
     def test_ready_failure_uses_standard_error_envelope(self) -> None:
         empty_db = str(Path(self.tmp.name) / "empty.sqlite3")
@@ -311,6 +343,8 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn("OPENJSON_RATE_LIMIT_REQUESTS", render_yaml)
         self.assertIn("OPENJSON_WS_RATE_LIMIT_ENABLED", render_yaml)
         self.assertIn("OPENJSON_WS_RATE_LIMIT_MESSAGES", render_yaml)
+        self.assertIn("OPENJSON_REQUEST_BODY_LIMIT_ENABLED", render_yaml)
+        self.assertIn("OPENJSON_MAX_REQUEST_BODY_BYTES", render_yaml)
 
     def test_deployment_status_smoke_runner_uses_public_read_only_surfaces(self) -> None:
         before = self._counts()
@@ -325,6 +359,8 @@ class DeploymentHardeningTests(unittest.TestCase):
                 "OPENJSON_WS_RATE_LIMIT_ENABLED": "1",
                 "OPENJSON_WS_RATE_LIMIT_MESSAGES": "10",
                 "OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS": "60",
+                "OPENJSON_REQUEST_BODY_LIMIT_ENABLED": "1",
+                "OPENJSON_MAX_REQUEST_BODY_BYTES": "10485760",
             },
             clear=False,
         ):
@@ -340,6 +376,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(result["version"]["source"]["git_commit"], "smoke-sha")
         self.assertTrue(result["version"]["runtime_config"]["rate_limit_enabled"])
         self.assertTrue(result["version"]["runtime_config"]["websocket_rate_limit_enabled"])
+        self.assertTrue(result["version"]["runtime_config"]["request_body_limit_enabled"])
         self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
         self.assertTrue(result["app"]["contains_openjson"])
         self.assertEqual(self._counts(), before)
