@@ -148,8 +148,9 @@ python scripts\release_preflight.py
 
 This verifies the local Git state, Render Blueprint guard settings, deployment
 runtime files, and the operation scripts required for integrity checks,
-backup, restore, and the SQLite backup restore drill. See
-`docs/TASK_122_PLAN.md` and `docs/TASK_126_PLAN.md`.
+backup, restore, backup status checks, and the SQLite backup restore drill. See
+`docs/TASK_122_PLAN.md`, `docs/TASK_126_PLAN.md`, and
+`docs/TASK_129_PLAN.md`.
 
 Derived compacted document snapshots:
 
@@ -646,6 +647,20 @@ The drill creates an integrity-checked backup, restores it into a temporary
 SQLite database, verifies combined integrity on the restored DB, and removes
 the temporary restored DB unless `--keep-restored` is provided. See
 `docs/TASK_125_PLAN.md`.
+
+SQLite latest backup status check:
+
+```powershell
+python scripts\check_backup_status.py `
+  --output-dir "D:\OpenJson\backups" `
+  --max-age-seconds 90000 `
+  --require-encrypted
+```
+
+The status check is read-only. It verifies the latest backup manifest, backup
+file existence, size, SHA-256, combined integrity status, age, and optional
+encryption requirement. It exits nonzero when any check fails. See
+`docs/TASK_129_PLAN.md`.
 
 Single-instance SQLite backup scheduler:
 

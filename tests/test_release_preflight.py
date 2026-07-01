@@ -28,6 +28,7 @@ def _write_runtime_files(root: Path, *, render_yaml: str | None = None) -> None:
     (root / "scripts" / "check_database_integrity.py").write_text("# integrity\n", encoding="utf-8")
     (root / "scripts" / "backup_crypto.py").write_text("# backup crypto\n", encoding="utf-8")
     (root / "scripts" / "backup_sqlite.py").write_text("# backup\n", encoding="utf-8")
+    (root / "scripts" / "check_backup_status.py").write_text("# backup status\n", encoding="utf-8")
     (root / "scripts" / "restore_sqlite.py").write_text("# restore\n", encoding="utf-8")
     (root / "scripts" / "backup_restore_drill.py").write_text("# drill\n", encoding="utf-8")
     (root / "render.yaml").write_text(
@@ -111,6 +112,10 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(report["checks"]["render_blueprint"]["status"], "ok")
         self.assertIn(
             "scripts/backup_restore_drill.py",
+            report["checks"]["required_files"]["details"]["required_operation_files"],
+        )
+        self.assertIn(
+            "scripts/check_backup_status.py",
             report["checks"]["required_files"]["details"]["required_operation_files"],
         )
         self.assertIn("expect-backup-scheduler-enabled true", report["summary"]["next_actions"][0])

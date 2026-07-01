@@ -137,6 +137,18 @@ python scripts/backup_restore_drill.py \
 The drill writes a JSON report and exits nonzero unless both backup integrity
 and restored database integrity pass.
 
+To check the latest scheduled backup without restoring it:
+
+```bash
+python scripts/check_backup_status.py \
+  --output-dir /data/backups \
+  --max-age-seconds 90000 \
+  --require-encrypted
+```
+
+The status check exits nonzero if the latest backup is missing, too old,
+corrupted relative to its manifest, not integrity-clean, or not encrypted.
+
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
 ```text
@@ -203,8 +215,8 @@ The preflight should return `"status": "ok"` before the Render deploy. If it
 reports a dirty worktree, a non-`main` branch, an out-of-sync upstream, missing
 runtime or operation files, or a broken `render.yaml` guard, fix that first.
 Operation files include the replay/integrity checks, backup and restore
-scripts, backup encryption helper, and SQLite backup restore drill. See
-`docs/TASK_126_PLAN.md`.
+scripts, backup encryption helper, backup status check, and SQLite backup
+restore drill. See `docs/TASK_126_PLAN.md` and `docs/TASK_129_PLAN.md`.
 
 3. Open the Render Blueprint URL:
 

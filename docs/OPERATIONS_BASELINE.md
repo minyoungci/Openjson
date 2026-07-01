@@ -201,6 +201,31 @@ python scripts\backup_restore_drill.py `
 The drill exits successfully only when backup integrity and restored database
 integrity are both `ok`. It deletes the temporary restored database by default.
 
+## SQLite Backup Status Check
+
+Check the latest backup manifest without creating, restoring, or deleting
+backup files:
+
+```powershell
+python scripts\check_backup_status.py `
+  --output-dir "D:\OpenJson\backups" `
+  --max-age-seconds 90000
+```
+
+For encrypted scheduled backups, require encryption in the latest manifest:
+
+```powershell
+python scripts\check_backup_status.py `
+  --output-dir "D:\OpenJson\backups" `
+  --max-age-seconds 90000 `
+  --require-encrypted
+```
+
+The command exits nonzero if the latest manifest is missing or malformed, the
+referenced backup file is missing, file size or SHA-256 does not match the
+manifest, `integrity.status` is not `ok`, the backup is too old, or encryption
+is required but absent. See `docs/TASK_129_PLAN.md`.
+
 ## SQLite Backup Scheduler
 
 For the current single-instance SQLite deployment, the FastAPI app can run a
@@ -229,6 +254,8 @@ separate cron service.
   deployment as an in-process web service task.
 - Backup retention is local filesystem retention only; there is no managed
   remote object storage lifecycle policy.
+- Backup status checks are read-only filesystem checks over the latest
+  manifest and backup file; they do not replace offsite backup monitoring.
 - Backup encryption is implemented for the SQLite MVP script, but key
   management and rotation remain external operational responsibilities.
 - PostgreSQL backup/restore is a future task.

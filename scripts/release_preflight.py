@@ -34,6 +34,7 @@ REQUIRED_OPERATION_FILES = (
     "scripts/check_database_integrity.py",
     "scripts/backup_crypto.py",
     "scripts/backup_sqlite.py",
+    "scripts/check_backup_status.py",
     "scripts/restore_sqlite.py",
     "scripts/backup_restore_drill.py",
 )

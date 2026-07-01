@@ -360,6 +360,12 @@ non-secret status fields. Missing encryption secrets for enabled encrypted
 scheduled backups fail `GET /ready` without mutating database rows or backup
 files.
 
+TASK_129 SQLite backup status checking also adds no table. It is a read-only
+filesystem inspection over backup manifests and backup files. It verifies
+latest backup age, manifest JSON, file existence, size, SHA-256, integrity
+status, and optional encryption policy without mutating SQLite rows or backup
+artifacts.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

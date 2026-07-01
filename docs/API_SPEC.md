@@ -158,6 +158,7 @@ See `docs/TASK_127_PLAN.md` for the single-instance SQLite daily backup
 scheduler.
 See `docs/TASK_128_PLAN.md` for encrypted scheduled-backup readiness
 hardening.
+See `docs/TASK_129_PLAN.md` for the read-only SQLite backup status check.
 
 ## Deployment Version
 
