@@ -43,3 +43,9 @@ services:
         value: "1"
       - key: OPENJSON_MAX_REQUEST_BODY_BYTES
         value: "10485760"
+      - key: OPENJSON_PROJECT_USAGE_LIMIT_ENABLED
+        value: "1"
+      - key: OPENJSON_MAX_PROJECT_DOCUMENTS
+        value: "10000"
+      - key: OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES
+        value: "104857600"

@@ -13,6 +13,7 @@ from app.errors import AppError, ErrorCode
 from app.json_pointer import join_pointer
 from app.path_validation import ensure_relative_document_path
 from app.permissions import ProjectPermission, require_project_permission
+from app.project_usage_service import canonical_snapshot_bytes, current_project_usage, project_usage_limit_config_from_env
 from app.schema_service import load_valid_schema_json
 from app.schema_validation import validate_instance
 
@@ -192,7 +193,63 @@ def _analyze_zip_archive(
                 archive_paths=archive_paths,
                 existing_document_paths=set(existing_documents.keys()),
             )
+    _mark_project_usage_limit(conn, project_id=project_id, candidates=candidates, top_errors=top_errors)
     return candidates, skipped_files, top_errors
+
+
+def _mark_project_usage_limit(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str,
+    candidates: list[ImportCandidate],
+    top_errors: list[dict[str, Any]],
+) -> None:
+    config = project_usage_limit_config_from_env()
+    if not config.enabled:
+        return
+    importable_candidates = [candidate for candidate in candidates if candidate.can_import]
+    usage = current_project_usage(conn, project_id=project_id)
+    attempted_usage = {
+        "active_document_count": usage["active_document_count"] + len(importable_candidates),
+        "active_snapshot_bytes": usage["active_snapshot_bytes"]
+        + sum(canonical_snapshot_bytes(candidate.content) for candidate in importable_candidates),
+    }
+    violations = []
+    if attempted_usage["active_document_count"] > config.max_documents:
+        violations.append(
+            {
+                "limit": "max_project_documents",
+                "max": config.max_documents,
+                "attempted": attempted_usage["active_document_count"],
+            }
+        )
+    if attempted_usage["active_snapshot_bytes"] > config.max_snapshot_bytes:
+        violations.append(
+            {
+                "limit": "max_project_snapshot_bytes",
+                "max": config.max_snapshot_bytes,
+                "attempted": attempted_usage["active_snapshot_bytes"],
+            }
+        )
+    if not violations:
+        return
+    top_errors.append(
+        {
+            "code": ErrorCode.PROJECT_USAGE_LIMIT_EXCEEDED,
+            "message": "ZIP import would exceed project usage limits.",
+            "details": {
+                "project_id": project_id,
+                "usage": usage,
+                "attempted_usage": attempted_usage,
+                "limits": {
+                    "enabled": config.enabled,
+                    "max_project_documents": config.max_documents,
+                    "max_project_snapshot_bytes": config.max_snapshot_bytes,
+                },
+                "violations": violations,
+            },
+        }
+    )
 
 
 def _read_zip_candidates(archive_bytes: bytes) -> tuple[list[ImportCandidate], list[dict[str, Any]]]:

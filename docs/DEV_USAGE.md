@@ -74,6 +74,9 @@ $env:OPENJSON_WS_RATE_LIMIT_MESSAGES = "120"
 $env:OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS = "60"
 $env:OPENJSON_REQUEST_BODY_LIMIT_ENABLED = "1"
 $env:OPENJSON_MAX_REQUEST_BODY_BYTES = "10485760"
+$env:OPENJSON_PROJECT_USAGE_LIMIT_ENABLED = "1"
+$env:OPENJSON_MAX_PROJECT_DOCUMENTS = "10000"
+$env:OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES = "104857600"
 ```
 
 Limited requests return `RATE_LIMITED` with HTTP 429. `/health`, `/ready`, and
@@ -81,6 +84,8 @@ Limited requests return `RATE_LIMITED` with HTTP 429. `/health`, `/ready`, and
 Limited WebSocket collaboration connections receive a structured
 `RATE_LIMITED` error payload and then close.
 Oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE` with HTTP 413.
+Project usage limit failures return `PROJECT_USAGE_LIMIT_EXCEEDED` before
+document events or snapshots are written.
 
 ## Operational Smoke Commands
 
@@ -274,6 +279,13 @@ and simple `.json` reference edges. Apply reruns the same checks in one write
 transaction. If any file is blocked, no imported documents or events are
 written. On success each JSON file is imported as a normal versioned document
 with a `create` document event.
+
+Project usage smoke:
+
+```powershell
+curl.exe "http://127.0.0.1:8000/projects/project_dev/usage" `
+  -H "X-Actor-Id: user_dev"
+```
 
 Raw JSON editor content save:
 

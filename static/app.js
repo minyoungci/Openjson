@@ -122,6 +122,8 @@
     schemaListError: null,
     projectMembers: [],
     memberListError: null,
+    projectUsage: null,
+    projectUsageError: null,
     commentThreads: [],
     createSchemaMatch: null,
     schemaMatchTimer: null,
@@ -796,18 +798,21 @@
     if (selectedDocumentId) {
       params.selected_document_id = selectedDocumentId;
     }
-    const [data, schemaData, memberData] = await Promise.all([
+    const [data, schemaData, memberData, usageData] = await Promise.all([
       apiFetch(`/projects/${encodeURIComponent(state.projectId)}/editor-bootstrap`, {
         query: params,
       }),
       fetchProjectSchemasSafe(),
       fetchProjectMembersSafe(),
+      fetchProjectUsageSafe(),
     ]);
     state.bootstrap = data;
     state.projectSchemas = schemaData.schemas;
     state.schemaListError = schemaData.error;
     state.projectMembers = memberData.members;
     state.memberListError = memberData.error;
+    state.projectUsage = usageData.usage;
+    state.projectUsageError = usageData.error;
     state.loading = false;
     showWorkspaceScreen();
     renderBootstrap(data);
@@ -842,6 +847,15 @@
       return { members: data.members || [], error: null };
     } catch (error) {
       return { members: [], error };
+    }
+  }
+
+  async function fetchProjectUsageSafe() {
+    try {
+      const data = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/usage`);
+      return { usage: data, error: null };
+    } catch (error) {
+      return { usage: null, error };
     }
   }
 
@@ -1007,6 +1021,24 @@
     }
     if (data.bootstrap.read_only) {
       els.statusChips.appendChild(chip("bootstrap", "info"));
+    }
+    if (state.projectUsage) {
+      const usage = state.projectUsage.usage;
+      const limits = state.projectUsage.limits;
+      els.statusChips.appendChild(chip(`${usage.active_document_count} docs`, "info"));
+      if (limits.enabled) {
+        const ratio = usage.active_snapshot_bytes / Math.max(1, limits.max_project_snapshot_bytes);
+        els.statusChips.appendChild(
+          chip(
+            `${formatBytes(usage.active_snapshot_bytes)} / ${formatBytes(limits.max_project_snapshot_bytes)}`,
+            ratio >= 0.8 ? "warn" : "info",
+          )
+        );
+      } else {
+        els.statusChips.appendChild(chip(`${formatBytes(usage.active_snapshot_bytes)} snapshots`, "info"));
+      }
+    } else if (state.projectUsageError) {
+      els.statusChips.appendChild(chip("usage unavailable", "warn"));
     }
   }
 
@@ -2323,6 +2355,17 @@
     } catch (_error) {
       return String(value);
     }
+  }
+
+  function formatBytes(value) {
+    const bytes = Number(value) || 0;
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    if (bytes >= 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${bytes} B`;
   }
 
   function renderPreview(preview) {

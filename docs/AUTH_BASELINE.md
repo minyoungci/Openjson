@@ -116,6 +116,8 @@ Bearer-token document patch preview scope is pinned in
 - TASK_116 adds a simple in-process HTTP rate limit for the single-instance
   deployment. TASK_117 adds a per-connection WebSocket message limit.
   TASK_118 adds an HTTP request body size guard. Distributed limits and
-  plan-based quotas remain future work.
+  plan-based quotas remain future work. TASK_119 adds a project active
+  document/snapshot usage guard, but not billing or historical event-log
+  accounting.
 - No admin-wide token management yet.
 - No token rotation endpoint yet.

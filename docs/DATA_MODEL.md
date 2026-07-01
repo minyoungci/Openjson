@@ -317,6 +317,13 @@ TASK_118 HTTP request body limiting also adds no table. It is request-time
 operational enforcement before endpoint parsing and must reject oversized
 requests before document, event, audit, auth, or import mutations occur.
 
+TASK_119 project usage limiting adds no table. It derives active document count
+and active latest snapshot bytes from `json_documents` rows where
+`deleted_at IS NULL`. It is an operational guard before create, update,
+restore, rollback, and ZIP import writes; it does not rewrite historical
+`document_events`, account for deleted historical event-log bytes, or implement
+billing quotas.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

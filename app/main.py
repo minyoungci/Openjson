@@ -76,6 +76,7 @@ from app.integrity_service import (
 )
 from app.observability import configure_request_observability
 from app.offline_sync_service import apply_offline_sync_batch
+from app.project_usage_service import get_project_usage, project_usage_limit_config_from_env
 from app.rate_limit import (
     FixedWindowRateLimiter,
     configure_rate_limiting,
@@ -202,6 +203,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
         enabled_raw=os.environ.get("OPENJSON_REQUEST_BODY_LIMIT_ENABLED"),
         max_bytes_raw=os.environ.get("OPENJSON_MAX_REQUEST_BODY_BYTES"),
     )
+    application.state.project_usage_limit_config = project_usage_limit_config_from_env(
+        enabled_raw=os.environ.get("OPENJSON_PROJECT_USAGE_LIMIT_ENABLED"),
+        max_documents_raw=os.environ.get("OPENJSON_MAX_PROJECT_DOCUMENTS"),
+        max_snapshot_bytes_raw=os.environ.get("OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES"),
+    )
     configure_request_body_limiting(application, config=request_body_limit_config)
     configure_rate_limiting(application, config=rate_limit_config)
     configure_request_observability(
@@ -267,6 +273,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             rate_limit_config=application.state.rate_limit_config,
             websocket_rate_limit_config=application.state.websocket_rate_limit_config,
             request_body_limit_config=application.state.request_body_limit_config,
+            project_usage_limit_config=application.state.project_usage_limit_config,
         )
 
     @application.get("/ready")
@@ -396,6 +403,14 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @application.get("/projects/{project_id}")
     def get_project_endpoint(project_id: str, actor_id: ActorHeader = None) -> dict:
         return get_project(
+            application.state.db_path,
+            project_id=project_id,
+            actor_id=actor_id,
+        )
+
+    @application.get("/projects/{project_id}/usage")
+    def get_project_usage_endpoint(project_id: str, actor_id: ActorHeader = None) -> dict:
+        return get_project_usage(
             application.state.db_path,
             project_id=project_id,
             actor_id=actor_id,

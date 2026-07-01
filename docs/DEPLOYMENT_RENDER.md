@@ -82,6 +82,9 @@ OPENJSON_WS_RATE_LIMIT_MESSAGES=120
 OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS=60
 OPENJSON_REQUEST_BODY_LIMIT_ENABLED=1
 OPENJSON_MAX_REQUEST_BODY_BYTES=10485760
+OPENJSON_PROJECT_USAGE_LIMIT_ENABLED=1
+OPENJSON_MAX_PROJECT_DOCUMENTS=10000
+OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES=104857600
 ```
 
 `OPENJSON_ALLOW_ACTOR_HEADER=0` disables the development-only actor id fallback
@@ -99,6 +102,10 @@ Limited sockets receive a structured `RATE_LIMITED` payload and close.
 Oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE` with HTTP 413
 before endpoint handlers parse or mutate application data. The default Render
 limit is 10 MiB, matching the current ZIP archive limit.
+Project usage limits reject create/save/restore/rollback/ZIP import mutations
+with `PROJECT_USAGE_LIMIT_EXCEEDED` before document event or snapshot writes.
+The default Render guard is 10,000 active documents and 100 MiB of active latest
+snapshot JSON per project.
 
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
@@ -172,7 +179,8 @@ persistent database before treating the deploy as live.
 `runtime_config.actor_header_allowed=false`. It should also show
 `runtime_config.rate_limit_enabled=true` and
 `runtime_config.websocket_rate_limit_enabled=true`, plus
-`runtime_config.request_body_limit_enabled=true`.
+`runtime_config.request_body_limit_enabled=true` and
+`runtime_config.project_usage_limit_enabled=true`.
 
 You can run the deployment status smoke from this repo:
 

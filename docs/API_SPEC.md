@@ -146,6 +146,7 @@ See `docs/TASK_115_PLAN.md` for the readiness migration gate.
 See `docs/TASK_116_PLAN.md` for the HTTP rate limit guard.
 See `docs/TASK_117_PLAN.md` for the WebSocket message rate limit guard.
 See `docs/TASK_118_PLAN.md` for the HTTP request body size guard.
+See `docs/TASK_119_PLAN.md` for the project usage limit guard.
 
 ## Deployment Version
 
@@ -171,9 +172,14 @@ It may include non-secret rate-limit flags:
 - `runtime_config.websocket_rate_limit_window_seconds`
 - `runtime_config.request_body_limit_enabled`
 - `runtime_config.max_request_body_bytes`
+- `runtime_config.project_usage_limit_enabled`
+- `runtime_config.max_project_documents`
+- `runtime_config.max_project_snapshot_bytes`
 
 When enabled, oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE`
 with HTTP 413 before endpoint handlers parse or mutate application data.
+When enabled, project usage limits return `PROJECT_USAGE_LIMIT_EXCEEDED` before
+document event or snapshot mutation writes.
 
 ## Deployment Readiness
 
@@ -202,6 +208,7 @@ the endpoint returns HTTP 503 with the standard `INTERNAL_ERROR` envelope and
 - `POST /workspaces/{workspace_id}/projects`
 - `GET /workspaces/{workspace_id}/projects`
 - `GET /projects/{project_id}`
+- `GET /projects/{project_id}/usage`
 - `GET /projects/{project_id}/members`
 - `POST /projects/{project_id}/members`
 - `PATCH /projects/{project_id}/members/{user_id}`
@@ -417,6 +424,10 @@ success each JSON member is created through the normal document create pipeline
 as version `1` with an append-only `event_type = "create"` document event.
 This is not Git import/export and does not introduce branching, pull requests,
 merge resolution, background import jobs, or realtime collaboration.
+Project usage is a read-only derived view over active document count and active
+latest snapshot bytes. Usage limits are optional deployment guards over active
+snapshot size, not billing, historical event-log accounting, hard deletion, or
+retention policy.
 Document collaboration-state is a read-only monitoring surface over active
 editor presence and accepted `document_events` checkpoints. Presence rows are
 transient operational state; they do not alter snapshots or document event

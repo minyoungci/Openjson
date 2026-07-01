@@ -11,6 +11,7 @@ from app.json_patch import PatchApplyError, UnsupportedPatchOperationError, appl
 from app.json_pointer import JsonPointerError, get_value, join_pointer, parse_pointer
 from app.path_validation import ensure_relative_document_path, ensure_relative_path_prefix
 from app.permissions import ProjectPermission, ROLE_PERMISSIONS, require_actor, require_project_permission
+from app.project_usage_service import ensure_project_usage_allows_snapshot
 from app.replay import diff_json, replay_events
 from app.schema_service import (
     get_schema_row,
@@ -841,6 +842,12 @@ def create_document_in_transaction(
     if schema_row is not None:
         resolved_schema_id = schema_row["id"]
         validation = ensure_schema_validates(load_valid_schema_json(schema_row), normalized_content)
+    ensure_project_usage_allows_snapshot(
+        conn,
+        project_id=project_id,
+        candidate_snapshot=normalized_content,
+        document_count_delta=1,
+    )
     patch = [{"op": "add", "path": "", "value": normalized_content}]
     before_values = [{"path": "", "exists": False, "value": None}]
     after_values = [{"path": "", "exists": True, "value": normalized_content}]
@@ -2467,6 +2474,12 @@ def apply_document_patch_in_transaction(
     validation = {"valid": True, "errors": [], "warnings": []}
     if row["schema_id"]:
         validation = ensure_schema_validates(load_valid_bound_schema_json(conn, row["schema_id"]), next_snapshot)
+    ensure_project_usage_allows_snapshot(
+        conn,
+        project_id=row["project_id"],
+        candidate_snapshot=next_snapshot,
+        replacing_document_id=row["id"],
+    )
     result_version = base_version + 1
     event_id = _insert_event(
         conn,
@@ -2630,6 +2643,12 @@ def restore_document(
         validation = {"valid": True, "errors": [], "warnings": []}
         if row["schema_id"]:
             validation = ensure_schema_validates(load_valid_bound_schema_json(conn, row["schema_id"]), snapshot)
+        ensure_project_usage_allows_snapshot(
+            conn,
+            project_id=row["project_id"],
+            candidate_snapshot=snapshot,
+            document_count_delta=1,
+        )
         result_version = base_version + 1
         event_id = _insert_event(
             conn,
@@ -2971,6 +2990,12 @@ def rollback_document(
         validation = {"valid": True, "errors": [], "warnings": []}
         if row["schema_id"]:
             validation = ensure_schema_validates(load_valid_bound_schema_json(conn, row["schema_id"]), target_snapshot)
+        ensure_project_usage_allows_snapshot(
+            conn,
+            project_id=row["project_id"],
+            candidate_snapshot=target_snapshot,
+            replacing_document_id=document_id,
+        )
         current_snapshot = _load_document_snapshot(row)
         changes = diff_json(current_snapshot, target_snapshot)
         result_version = base_version + 1

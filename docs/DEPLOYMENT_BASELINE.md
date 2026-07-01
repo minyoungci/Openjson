@@ -72,6 +72,12 @@ See `docs/MIGRATIONS_BASELINE.md` for the SQLite MVP migration ledger policy.
   reject oversized HTTP request bodies before endpoint parsing.
 - `OPENJSON_MAX_REQUEST_BODY_BYTES`: maximum accepted HTTP request body size.
   Defaults to `10485760`.
+- `OPENJSON_PROJECT_USAGE_LIMIT_ENABLED`: set to `1`, `true`, or `yes` to
+  enforce project active document and active snapshot-byte limits.
+- `OPENJSON_MAX_PROJECT_DOCUMENTS`: maximum active documents per project.
+  Defaults to `10000`.
+- `OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES`: maximum active latest snapshot bytes
+  per project. Defaults to `104857600`.
 
 Example:
 
@@ -81,6 +87,7 @@ $env:OPENJSON_CORS_ORIGINS = "http://localhost:3000"
 $env:OPENJSON_RATE_LIMIT_ENABLED = "1"
 $env:OPENJSON_WS_RATE_LIMIT_ENABLED = "1"
 $env:OPENJSON_REQUEST_BODY_LIMIT_ENABLED = "1"
+$env:OPENJSON_PROJECT_USAGE_LIMIT_ENABLED = "1"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
