@@ -595,6 +595,11 @@ or token context before applying signup, login, logout, or refresh-token
 responses. This does not alter session-token hashing, refresh-token rotation
 storage, permissions, memberships, canonical snapshots, or append-only
 `document_events`.
+TASK_174 stale bootstrap child-response guarding also adds no table. The static
+browser client passes bootstrap request ids into schema, member, and usage
+helper fetches and ignores stale child results before they can populate browser
+state. This does not alter schema, membership, usage, permission, canonical
+snapshot, or append-only `document_events` storage.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

@@ -256,6 +256,9 @@ reloads.
 See `docs/TASK_173_PLAN.md` for guarding stale browser signup, login, logout,
 and refresh-token responses after overlapping account transitions, auth form
 changes, or session clearing.
+See `docs/TASK_174_PLAN.md` for guarding stale browser bootstrap child
+responses for schemas, team members, and project usage after project switches
+or overlapping bootstrap loads.
 
 ## Deployment Version
 
@@ -746,6 +749,11 @@ Refresh-token responses must match the captured refresh token before rotating
 the browser session. Auth form edits and session clearing invalidate
 outstanding account-transition requests, and stale successes or failures are
 ignored instead of applying sessions or rendering stale account status.
+Editor bootstrap child responses in the static browser for schema lists, team
+members, and project usage are accepted only when they still match the active
+bootstrap request id and project id. Stale child responses return a non-fatal
+stale marker and are not used to populate project schemas, team members, or
+usage chips.
 Project-creation responses in the static browser are applied only when they
 still match the latest create request, captured actor id, visible create panel,
 workspace name input, project name input, and project description input.

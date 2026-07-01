@@ -615,15 +615,40 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateProjectInviteRequests()", bootstrap_loader)
         self.assertIn("invalidateProjectInviteAcceptRequests()", bootstrap_loader)
         self.assertIn("/projects/${encodeURIComponent(projectId)}/editor-bootstrap", bootstrap_loader)
-        self.assertIn("fetchProjectSchemasSafe(projectId)", bootstrap_loader)
-        self.assertIn("fetchProjectMembersSafe(projectId)", bootstrap_loader)
-        self.assertIn("fetchProjectUsageSafe(projectId)", bootstrap_loader)
+        self.assertIn("fetchProjectSchemasSafe(projectId, requestId)", bootstrap_loader)
+        self.assertIn("fetchProjectMembersSafe(projectId, requestId)", bootstrap_loader)
+        self.assertIn("fetchProjectUsageSafe(projectId, requestId)", bootstrap_loader)
         self.assertIn("if (!isCurrentBootstrapRequest(requestId, projectId))", bootstrap_loader)
         self.assertIn("finishStaleBootstrapRequest(requestId)", bootstrap_loader)
         self.assertIn("function isCurrentBootstrapRequest(requestId, projectId)", js.text)
         self.assertIn("function invalidateBootstrapRequests()", js.text)
         self.assertIn("function finishStaleBootstrapRequest(requestId)", js.text)
         self.assertIn("state.bootstrapRequestId += 1", js.text)
+        schema_fetcher = js.text.split("async function fetchProjectSchemasSafe", 1)[1].split(
+            "async function fetchProjectMembersSafe", 1
+        )[0]
+        self.assertIn("async function fetchProjectSchemasSafe(projectId, bootstrapRequestId)", js.text)
+        self.assertIn("isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)", schema_fetcher)
+        self.assertIn("staleBootstrapChildResult(\"schemas\")", schema_fetcher)
+        member_fetcher = js.text.split("async function fetchProjectMembersSafe", 1)[1].split(
+            "async function fetchProjectUsageSafe", 1
+        )[0]
+        self.assertIn("async function fetchProjectMembersSafe(projectId, bootstrapRequestId)", js.text)
+        self.assertIn("isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)", member_fetcher)
+        self.assertIn("staleBootstrapChildResult(\"members\")", member_fetcher)
+        usage_fetcher = js.text.split("async function fetchProjectUsageSafe", 1)[1].split(
+            "function isStaleBootstrapChildResponse", 1
+        )[0]
+        self.assertIn("async function fetchProjectUsageSafe(projectId, bootstrapRequestId)", js.text)
+        self.assertIn("isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)", usage_fetcher)
+        self.assertIn("staleBootstrapChildResult(\"usage\")", usage_fetcher)
+        self.assertIn("function isStaleBootstrapChildResponse(projectId, bootstrapRequestId)", js.text)
+        self.assertIn("bootstrapRequestId !== undefined", js.text)
+        self.assertIn("!isCurrentBootstrapRequest(bootstrapRequestId, projectId)", js.text)
+        self.assertIn("function staleBootstrapChildResult(kind)", js.text)
+        self.assertIn("return { schemas: [], error: null, stale: true }", js.text)
+        self.assertIn("return { members: [], error: null, stale: true }", js.text)
+        self.assertIn("return { usage: null, error: null, stale: true }", js.text)
         project_home_loader = js.text.split("async function loadProjectHome()", 1)[1].split(
             "async function createProjectFromGate", 1
         )[0]

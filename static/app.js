@@ -1151,9 +1151,9 @@
         apiFetch(`/projects/${encodeURIComponent(projectId)}/editor-bootstrap`, {
           query: params,
         }),
-        fetchProjectSchemasSafe(projectId),
-        fetchProjectMembersSafe(projectId),
-        fetchProjectUsageSafe(projectId),
+        fetchProjectSchemasSafe(projectId, requestId),
+        fetchProjectMembersSafe(projectId, requestId),
+        fetchProjectUsageSafe(projectId, requestId),
       ]);
     } catch (error) {
       if (!isCurrentBootstrapRequest(requestId, projectId)) {
@@ -1212,43 +1212,78 @@
     }
   }
 
-  async function fetchProjectSchemasSafe(projectId) {
+  async function fetchProjectSchemasSafe(projectId, bootstrapRequestId) {
     const targetProjectId = projectId || state.projectId;
     if (!targetProjectId) {
-      return { schemas: [], error: null };
+      return { schemas: [], error: null, stale: false };
     }
     try {
       const data = await apiFetch(`/projects/${encodeURIComponent(targetProjectId)}/schemas`);
-      return { schemas: data.schemas || [], error: null };
+      if (isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)) {
+        return staleBootstrapChildResult("schemas");
+      }
+      return { schemas: data.schemas || [], error: null, stale: false };
     } catch (error) {
-      return { schemas: [], error };
+      if (isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)) {
+        return staleBootstrapChildResult("schemas");
+      }
+      return { schemas: [], error, stale: false };
     }
   }
 
-  async function fetchProjectMembersSafe(projectId) {
+  async function fetchProjectMembersSafe(projectId, bootstrapRequestId) {
     const targetProjectId = projectId || state.projectId;
     if (!targetProjectId) {
-      return { members: [], error: null };
+      return { members: [], error: null, stale: false };
     }
     try {
       const data = await apiFetch(`/projects/${encodeURIComponent(targetProjectId)}/members`);
-      return { members: data.members || [], error: null };
+      if (isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)) {
+        return staleBootstrapChildResult("members");
+      }
+      return { members: data.members || [], error: null, stale: false };
     } catch (error) {
-      return { members: [], error };
+      if (isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)) {
+        return staleBootstrapChildResult("members");
+      }
+      return { members: [], error, stale: false };
     }
   }
 
-  async function fetchProjectUsageSafe(projectId) {
+  async function fetchProjectUsageSafe(projectId, bootstrapRequestId) {
     const targetProjectId = projectId || state.projectId;
     if (!targetProjectId) {
-      return { usage: null, error: null };
+      return { usage: null, error: null, stale: false };
     }
     try {
       const data = await apiFetch(`/projects/${encodeURIComponent(targetProjectId)}/usage`);
-      return { usage: data, error: null };
+      if (isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)) {
+        return staleBootstrapChildResult("usage");
+      }
+      return { usage: data, error: null, stale: false };
     } catch (error) {
-      return { usage: null, error };
+      if (isStaleBootstrapChildResponse(targetProjectId, bootstrapRequestId)) {
+        return staleBootstrapChildResult("usage");
+      }
+      return { usage: null, error, stale: false };
     }
+  }
+
+  function isStaleBootstrapChildResponse(projectId, bootstrapRequestId) {
+    return (
+      bootstrapRequestId !== undefined &&
+      !isCurrentBootstrapRequest(bootstrapRequestId, projectId)
+    );
+  }
+
+  function staleBootstrapChildResult(kind) {
+    if (kind === "schemas") {
+      return { schemas: [], error: null, stale: true };
+    }
+    if (kind === "members") {
+      return { members: [], error: null, stale: true };
+    }
+    return { usage: null, error: null, stale: true };
   }
 
   async function refreshTeamMembers() {
