@@ -238,6 +238,53 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertEqual(message["state"]["checkpoints"][0]["event_id"], response.json()["event_id"])
         self.assertEqual(message["state"]["checkpoints"][0]["event_type"], "rollback")
 
+    def test_http_delete_and_restore_endpoints_broadcast_document_lifecycle(self) -> None:
+        with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:
+            websocket.receive_json()
+            deleted_response = self.client.request(
+                "DELETE",
+                f"/documents/{self.document['id']}",
+                headers={"X-Actor-Id": self.owner_id},
+                json={"base_version": 1, "reason": "HTTP delete lifecycle"},
+            )
+            deleted_message = websocket.receive_json()
+            restored_response = self.client.post(
+                f"/documents/{self.document['id']}/restore",
+                headers={"X-Actor-Id": self.owner_id},
+                json={"base_version": deleted_response.json()["current_version"], "reason": "HTTP restore lifecycle"},
+            )
+            restored_message = websocket.receive_json()
+
+        deleted = deleted_response.json()
+        restored = restored_response.json()
+        self.assertEqual(deleted_response.status_code, 200)
+        self.assertEqual(deleted["event_type"], "delete")
+        self.assertEqual(deleted["current_version"], 2)
+        self.assertIsNotNone(deleted["deleted_at"])
+        self.assertEqual(deleted_message["type"], "document.lifecycle")
+        self.assertEqual(deleted_message["reason"], "document.deleted")
+        self.assertEqual(deleted_message["document_id"], self.document["id"])
+        self.assertEqual(deleted_message["event_type"], "delete")
+        self.assertEqual(deleted_message["event_id"], deleted["event_id"])
+        self.assertEqual(deleted_message["previous_version"], 1)
+        self.assertEqual(deleted_message["current_version"], 2)
+        self.assertEqual(deleted_message["deleted_at"], deleted["deleted_at"])
+        self.assertEqual(deleted_message["full_path"], self.document["full_path"])
+
+        self.assertEqual(restored_response.status_code, 200)
+        self.assertEqual(restored["event_type"], "restore")
+        self.assertEqual(restored["current_version"], 3)
+        self.assertIsNone(restored["deleted_at"])
+        self.assertEqual(restored_message["type"], "document.lifecycle")
+        self.assertEqual(restored_message["reason"], "document.restored")
+        self.assertEqual(restored_message["document_id"], self.document["id"])
+        self.assertEqual(restored_message["event_type"], "restore")
+        self.assertEqual(restored_message["event_id"], restored["event_id"])
+        self.assertEqual(restored_message["previous_version"], 2)
+        self.assertEqual(restored_message["current_version"], 3)
+        self.assertIsNone(restored_message["deleted_at"])
+        self.assertEqual(restored_message["full_path"], self.document["full_path"])
+
     def test_comment_thread_endpoint_broadcasts_comment_update(self) -> None:
         with self.client.websocket_connect(self._ws_path(self.owner_id)) as websocket:
             websocket.receive_json()

@@ -184,6 +184,8 @@ canonical document version changes outside the transient text session.
 See `docs/TASK_141_PLAN.md` for automatic WebSocket checkpoint broadcasts after
 accepted HTTP document mutations.
 See `docs/TASK_142_PLAN.md` for WebSocket comment-thread update notifications.
+See `docs/TASK_143_PLAN.md` for WebSocket document lifecycle update
+notifications.
 
 ## Deployment Version
 
@@ -562,6 +564,15 @@ contains `document_id`, `thread_id`, `reason`, and optional `comment_id` or
 `GET /documents/{document_id}/comment-threads` for the selected document. These
 notifications are operational only and do not create document events or mutate
 JSON snapshots.
+
+Document soft-delete and restore mutations send `document.lifecycle` over the
+same document WebSocket channel after the mutation transaction commits. The
+payload contains `document_id`, `event_type`, `event_id`, `previous_version`,
+`current_version`, `deleted_at`, `full_path`, and `reason`. Clients viewing the
+selected document should refresh project bootstrap state, or preserve an
+unsaved local editor buffer if the selected document was deleted remotely.
+These notifications are operational only; durable lifecycle history remains the
+existing append-only `document_events` `delete` and `restore` rows.
 
 Offline sync accepts a batch of queued client content-save operations:
 

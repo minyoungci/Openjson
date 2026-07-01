@@ -1466,6 +1466,44 @@
     setEditorStatus("Notes updated.", "info");
   }
 
+  async function applyDocumentLifecycleUpdate(payload) {
+    if (!payload || payload.document_id !== state.selectedDocumentId) {
+      return;
+    }
+    const versionLabel = payload.current_version || "?";
+    if (payload.event_type === "delete") {
+      if (state.dirty) {
+        const pathLabel = payload.full_path || els.documentPath.textContent || "Document";
+        state.selectedEditorState = null;
+        state.selectedDocumentId = "";
+        state.liveTextShadow = "";
+        state.liveTextRevision = 0;
+        state.liveTextPendingOperation = false;
+        state.liveTextNeedsResync = false;
+        state.baseVersion = null;
+        state.currentVersion = payload.current_version || null;
+        state.commentThreads = [];
+        localStorage.removeItem("openjson.selectedDocumentId");
+        updateBrowserUrl();
+        stopCollaborationLoop();
+        els.documentPath.textContent = `${pathLabel} (deleted)`;
+        els.documentMeta.textContent = `Deleted at version ${versionLabel}`;
+        clearPanel(els.collaborationPanel, "Document deleted by another user.");
+        clearPanel(els.commentsPanel, "Document deleted. Local buffer preserved.");
+        setEditorStatus(`Document deleted at version ${versionLabel}. Local buffer preserved.`, "error");
+        syncButtons();
+        return;
+      }
+      setEditorStatus(`Document deleted at version ${versionLabel}.`, "error");
+      await loadBootstrap(null);
+      return;
+    }
+    if (payload.event_type === "restore") {
+      setEditorStatus(`Document restored at version ${versionLabel}.`, "info");
+      await loadBootstrap(payload.document_id);
+    }
+  }
+
   async function createCommentThread() {
     if (!state.selectedDocumentId) {
       return;
@@ -1758,6 +1796,8 @@
         applyCollaborationState(payload.state).catch((error) => renderError(els.collaborationPanel, error));
       } else if (payload.type === "comment_threads.updated") {
         applyCommentThreadsUpdated(payload).catch((error) => renderError(els.commentsPanel, error));
+      } else if (payload.type === "document.lifecycle") {
+        applyDocumentLifecycleUpdate(payload).catch((error) => renderError(els.collaborationPanel, error));
       } else if (payload.type === "error" && payload.error) {
         markLiveTextOperationUnacknowledged();
         renderErrorObject(els.collaborationPanel, payload.error);

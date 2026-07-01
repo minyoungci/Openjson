@@ -224,6 +224,26 @@ async def _broadcast_comment_threads_updated(
     await collaboration_hub.broadcast(document_id, payload)
 
 
+async def _broadcast_document_lifecycle(
+    *,
+    document_id: str,
+    result: dict,
+    reason: str,
+) -> None:
+    payload = {
+        "type": "document.lifecycle",
+        "document_id": document_id,
+        "event_type": result.get("event_type"),
+        "event_id": result.get("event_id"),
+        "previous_version": result.get("previous_version"),
+        "current_version": result.get("current_version"),
+        "deleted_at": result.get("deleted_at"),
+        "full_path": result.get("full_path"),
+        "reason": reason,
+    }
+    await collaboration_hub.broadcast(document_id, payload)
+
+
 def _unexpected_error_details(request: Request | None, exc: Exception, *, debug: bool) -> dict:
     request_id = None
     if request is not None:
@@ -1287,32 +1307,44 @@ def create_app(db_path: str | None = None) -> FastAPI:
         return result
 
     @application.delete("/documents/{document_id}")
-    def delete_document_endpoint(
+    async def delete_document_endpoint(
         document_id: str,
         request: DeleteDocumentRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return delete_document(
+        result = delete_document(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
             base_version=request.base_version,
             reason=request.reason,
         )
+        await _broadcast_document_lifecycle(
+            document_id=document_id,
+            result=result,
+            reason="document.deleted",
+        )
+        return result
 
     @application.post("/documents/{document_id}/restore")
-    def restore_document_endpoint(
+    async def restore_document_endpoint(
         document_id: str,
         request: RestoreDocumentRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return restore_document(
+        result = restore_document(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
             base_version=request.base_version,
             reason=request.reason,
         )
+        await _broadcast_document_lifecycle(
+            document_id=document_id,
+            result=result,
+            reason="document.restored",
+        )
+        return result
 
     @application.get("/documents/{document_id}/history")
     def history_endpoint(document_id: str, actor_id: ActorHeader = None) -> dict:

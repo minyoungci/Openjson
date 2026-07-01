@@ -451,6 +451,13 @@ creation, replies, resolve, and reopen still persist only in `comment_threads`
 and append-only `comments`; the WebSocket payload only tells active clients to
 reload the document comment thread list.
 
+TASK_143 document lifecycle WebSocket notifications also add no table. Soft
+delete and restore still persist only through existing `json_documents`
+`deleted_at` changes and append-only `document_events` lifecycle rows. The
+`document.lifecycle` WebSocket payload is an operational notification derived
+from the accepted mutation response so connected clients can refresh or detach
+their local editor state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
