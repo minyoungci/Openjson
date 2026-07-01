@@ -1833,6 +1833,7 @@
 
   function applyLiveTextState(payload) {
     const sessionText = payload.content_text || "";
+    const wasReset = payload.session_reset === true;
     const hasLocalLiveTextBuffer =
       state.liveTextPendingOperation || state.liveTextNeedsResync || state.liveTextShadow !== els.editorBuffer.value;
     state.liveTextRevision = payload.text_revision || 0;
@@ -1842,14 +1843,20 @@
     if (hasLocalLiveTextBuffer) {
       updateSyntaxState();
       scheduleLiveTextDiffIfNeeded();
-      setEditorStatus(`Live text session rejoined at r${state.liveTextRevision}. Local buffer preserved and syncing.`, "info");
+      const message = wasReset
+        ? `Live text session reset to document v${payload.document_version}. Local buffer preserved and syncing.`
+        : `Live text session rejoined at r${state.liveTextRevision}. Local buffer preserved and syncing.`;
+      setEditorStatus(message, "info");
       return;
     }
     state.liveTextApplyingRemote = true;
     els.editorBuffer.value = sessionText;
     state.liveTextApplyingRemote = false;
     updateSyntaxState();
-    setEditorStatus(`Live text session joined at r${state.liveTextRevision}.`, "ok");
+    const message = wasReset
+      ? `Live text session reset to document v${payload.document_version}.`
+      : `Live text session joined at r${state.liveTextRevision}.`;
+    setEditorStatus(message, "ok");
   }
 
   function applyAcceptedLiveTextOperation(payload) {

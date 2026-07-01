@@ -431,6 +431,14 @@ session text before mutation. Invalid bounds return `INVALID_REQUEST` and do
 not advance text revision, append operation history, update canonical
 snapshots, or write `document_events`.
 
+TASK_140 live-text canonical version drift handling also adds no table. The
+in-process text session records the document version it was created from; when
+`text_session.join` observes a newer canonical document version, it discards the
+stale transient session and rebuilds it from latest editor-state
+`content_text`. Reset metadata is returned to clients so dirty local buffers can
+be preserved and re-diffed, but canonical storage and append-only
+`document_events` remain unchanged until a later valid commit succeeds.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

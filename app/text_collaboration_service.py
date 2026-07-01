@@ -51,14 +51,28 @@ class TextCollaborationManager:
         document = editor_state["document"]
         async with self._lock:
             session = self._sessions.get(document_id)
-            if session is None or (session.revision == 0 and session.document_version != document["current_version"]):
+            reset_metadata = None
+            if session is None:
                 session = TextSession(
                     document_id=document_id,
                     document_version=document["current_version"],
                     text=document["content_text"],
                 )
                 self._sessions[document_id] = session
-            return self._session_payload(session)
+            elif session.document_version != document["current_version"]:
+                reset_metadata = {
+                    "session_reset": True,
+                    "reset_reason": "document_version_changed",
+                    "previous_document_version": session.document_version,
+                    "previous_text_revision": session.revision,
+                }
+                session = TextSession(
+                    document_id=document_id,
+                    document_version=document["current_version"],
+                    text=document["content_text"],
+                )
+                self._sessions[document_id] = session
+            return self._session_payload(session, reset_metadata=reset_metadata)
 
     async def apply_operation(
         self,
@@ -90,9 +104,13 @@ class TextCollaborationManager:
                     )
             if base_revision > session.revision:
                 raise AppError(
-                    ErrorCode.INVALID_REQUEST,
-                    "base_text_revision cannot be ahead of the server text revision.",
-                    {"base_text_revision": base_revision, "server_text_revision": session.revision},
+                    ErrorCode.VERSION_CONFLICT,
+                    "Text session revision conflict. Reload collaborative text session.",
+                    {
+                        "client_text_revision": base_revision,
+                        "server_text_revision": session.revision,
+                        "conflict_policy": "reject_ahead_text_revision",
+                    },
                 )
             transformed = dict(incoming)
             for accepted in session.operations:
@@ -182,8 +200,8 @@ class TextCollaborationManager:
         return session
 
     @staticmethod
-    def _session_payload(session: TextSession) -> dict[str, Any]:
-        return {
+    def _session_payload(session: TextSession, *, reset_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = {
             "type": "text_session.state",
             "document_id": session.document_id,
             "document_version": session.document_version,
@@ -191,6 +209,9 @@ class TextCollaborationManager:
             "content_text": session.text,
             "updated_at": session.updated_at,
         }
+        if reset_metadata is not None:
+            payload.update(reset_metadata)
+        return payload
 
 
 def _require_text_session_write_permission(db_path: str, *, document_id: str, actor_id: str) -> None:

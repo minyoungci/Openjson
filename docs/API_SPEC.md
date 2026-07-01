@@ -179,6 +179,8 @@ See `docs/TASK_138_PLAN.md` for safer stale live-text operation transforms and
 single-operation transform conflict rejection.
 See `docs/TASK_139_PLAN.md` for rejecting out-of-bounds live-text operations
 instead of silently clamping indexes or ranges.
+See `docs/TASK_140_PLAN.md` for resetting stale live-text sessions when the
+canonical document version changes outside the transient text session.
 
 ## Deployment Version
 
@@ -536,6 +538,15 @@ state.
 After transform, text operation bounds are validated against the active session
 text. Out-of-bounds insert, delete, or replace operations return
 `INVALID_REQUEST` and do not advance the transient text revision.
+If `text_session.join` finds that the canonical document version changed since
+the in-memory text session was created, it resets the transient session to the
+latest canonical `content_text` and returns `text_session.state` with
+`session_reset = true`, `reset_reason = "document_version_changed"`,
+`previous_document_version`, and `previous_text_revision`. Clients with a dirty
+local editor buffer should preserve that buffer and re-diff it against the
+returned authoritative session text. Text operations sent from the old session
+after such a reset return `VERSION_CONFLICT` when their `base_text_revision` is
+ahead of the reset session revision.
 
 Offline sync accepts a batch of queued client content-save operations:
 

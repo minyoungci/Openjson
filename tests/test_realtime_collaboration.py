@@ -413,6 +413,129 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertEqual(after["text_revision"], before["text_revision"])
         self.assertEqual(after["content_text"], before["content_text"])
 
+    def test_text_session_join_resets_after_external_document_version_change(self) -> None:
+        document = create_document(
+            self.db_path,
+            project_id=self.project_id,
+            actor_id=self.owner_id,
+            full_path="config/text-version-drift.json",
+            content={"text": "abc"},
+        )
+
+        async def scenario() -> tuple[dict[str, Any], dict[str, Any]]:
+            state = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            accepted = await text_collaboration_manager.apply_operation(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+                message={
+                    "client_id": "owner-client",
+                    "client_operation_id": "owner-uncommitted-insert",
+                    "base_text_revision": state["text_revision"],
+                    "op": {"type": "insert", "index": state["content_text"].index("b"), "text": "X"},
+                },
+            )
+            patch_document(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.editor_id,
+                base_version=1,
+                patch=[{"op": "replace", "path": "/text", "value": "server"}],
+            )
+            reset = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            return accepted, reset
+
+        accepted, reset = asyncio.run(scenario())
+
+        self.assertEqual(accepted["server_text_revision"], 1)
+        self.assertEqual(reset["type"], "text_session.state")
+        self.assertTrue(reset["session_reset"])
+        self.assertEqual(reset["reset_reason"], "document_version_changed")
+        self.assertEqual(reset["previous_document_version"], 1)
+        self.assertEqual(reset["previous_text_revision"], 1)
+        self.assertEqual(reset["document_version"], 2)
+        self.assertEqual(reset["text_revision"], 0)
+        self.assertIn('"server"', reset["content_text"])
+        self.assertNotIn("aXbc", reset["content_text"])
+        loaded = self.client.get(f"/documents/{document['id']}", headers={"X-Actor-Id": self.owner_id})
+        self.assertEqual(loaded.json()["content"], {"text": "server"})
+
+    def test_text_session_operation_after_reset_conflicts_without_mutating_text(self) -> None:
+        document = create_document(
+            self.db_path,
+            project_id=self.project_id,
+            actor_id=self.owner_id,
+            full_path="config/text-reset-conflict.json",
+            content={"text": "abc"},
+        )
+
+        async def scenario() -> tuple[dict[str, Any], AppError, dict[str, Any]]:
+            state = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            accepted = await text_collaboration_manager.apply_operation(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+                message={
+                    "client_id": "owner-client",
+                    "client_operation_id": "owner-old-insert",
+                    "base_text_revision": state["text_revision"],
+                    "op": {"type": "insert", "index": state["content_text"].index("b"), "text": "X"},
+                },
+            )
+            patch_document(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.editor_id,
+                base_version=1,
+                patch=[{"op": "replace", "path": "/text", "value": "server"}],
+            )
+            try:
+                await text_collaboration_manager.apply_operation(
+                    self.db_path,
+                    document_id=document["id"],
+                    actor_id=self.owner_id,
+                    message={
+                        "client_id": "owner-client",
+                        "client_operation_id": "owner-stale-after-reset",
+                        "base_text_revision": accepted["server_text_revision"],
+                        "op": {"type": "insert", "index": 0, "text": "Z"},
+                    },
+                )
+            except AppError as exc:
+                conflict = exc
+            else:
+                raise AssertionError("Expected reset text revision conflict")
+            current = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            return accepted, conflict, current
+
+        accepted, conflict, current = asyncio.run(scenario())
+
+        self.assertEqual(accepted["server_text_revision"], 1)
+        self.assertEqual(conflict.code, ErrorCode.VERSION_CONFLICT)
+        self.assertEqual(conflict.details["conflict_policy"], "reject_ahead_text_revision")
+        self.assertEqual(conflict.details["client_text_revision"], 1)
+        self.assertEqual(conflict.details["server_text_revision"], 0)
+        self.assertEqual(current["document_version"], 2)
+        self.assertEqual(current["text_revision"], 0)
+        self.assertIn('"server"', current["content_text"])
+        self.assertNotIn("Z", current["content_text"])
+
     def test_missing_actor_websocket_gets_structured_error(self) -> None:
         with self.client.websocket_connect(self._ws_path()) as websocket:
             message = websocket.receive_json()
