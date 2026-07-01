@@ -224,6 +224,8 @@ switches.
 See `docs/TASK_161_PLAN.md` for guarding stale browser validation, preview,
 conflict-preview, history, and diff panel responses after overlapping requests,
 document switches, version changes, or editor buffer changes.
+See `docs/TASK_162_PLAN.md` for guarding stale browser manual save and autosave
+responses after document switches, version changes, or editor buffer changes.
 
 ## Deployment Version
 
@@ -687,6 +689,12 @@ they still match the latest request for the selected document and the captured
 version or editor-buffer inputs. This applies to validation, content preview,
 conflict preview, history, and diff panels; stale successes and stale failures
 are ignored.
+Content save responses in the static browser are applied only when they still
+match the latest save request for the selected document, captured base version,
+and captured editor text. Manual save and autosave share the same in-flight
+guard; stale successes and stale failures do not update the current editor UI.
+Offline queue fallback uses the captured save payload rather than mutable
+current editor state.
 
 Offline sync accepts a batch of queued client content-save operations:
 

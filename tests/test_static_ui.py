@@ -265,6 +265,27 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("state.conflictPreviewRequestId += 1", js.text)
         self.assertIn("state.historyRequestId += 1", js.text)
         self.assertIn("state.diffRequestId += 1", js.text)
+        save_loader = js.text.split("async function saveSelected", 1)[1].split(
+            "async function loadConflictPreview", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", save_loader)
+        self.assertIn("const baseVersion = state.baseVersion", save_loader)
+        self.assertIn("const contentText = els.editorBuffer.value", save_loader)
+        self.assertIn("const mergeStrategy = state.autoMergeEnabled ? \"auto\" : \"reject\"", save_loader)
+        self.assertIn("const requestId = state.saveRequestId + 1", save_loader)
+        self.assertIn("state.saveRequestId = requestId", save_loader)
+        self.assertIn("state.saving = true", save_loader)
+        self.assertIn("/documents/${encodeURIComponent(documentId)}/content", save_loader)
+        self.assertIn("if (!isCurrentSaveRequest(requestId, documentId, baseVersion, contentText))", save_loader)
+        self.assertIn("queueOfflineSave(savePayload)", save_loader)
+        self.assertIn("function isCurrentSaveRequest(requestId, documentId, baseVersion, contentText)", js.text)
+        self.assertIn("function invalidateSaveRequests()", js.text)
+        self.assertIn("state.saveRequestId += 1", js.text)
+        self.assertIn("state.saving = false", js.text)
+        self.assertIn("const busy = state.loading || state.saving || state.autosaving", js.text)
+        editor_state_setter = js.text.split("function setSelectedEditorState", 1)[1].split("function clearEditor", 1)[0]
+        self.assertIn("state.selectedDocumentId !== editorState.document.id", editor_state_setter)
+        self.assertIn("invalidateSaveRequests()", editor_state_setter)
         self.assertIn("loadCommentThreads", js.text)
         self.assertIn("comment_threads.updated", js.text)
         self.assertIn("applyCommentThreadsUpdated", js.text)
@@ -330,6 +351,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateProjectHomeRequests()", session_clearer)
         self.assertIn("invalidateTeamMembersRequests()", session_clearer)
         self.assertIn("invalidateDocumentPanelRequests()", session_clearer)
+        self.assertIn("invalidateSaveRequests()", session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1
         )[0]

@@ -588,6 +588,16 @@ requests. This is client-only state and does not persist validation results or
 affect canonical snapshots, append-only `document_events`, schemas, comments,
 reviews, or WebSocket server state.
 
+TASK_162 stale content save response guarding also adds no table. The static
+browser client tracks manual save and autosave requests in memory and applies a
+save response only while it still matches the latest request, selected document
+id, captured base version, and captured editor text. Offline queue fallback uses
+the captured save payload instead of mutable current editor state. Clearing the
+selected editor, receiving a live selected-document delete payload, clearing
+session state, or switching selected documents invalidates outstanding save UI
+responses. Accepted saves still persist only through the existing content save
+pipeline as append-only `document_events`.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

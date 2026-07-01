@@ -162,6 +162,8 @@
     liveTextNeedsResync: false,
     liveTextClientId: localStorage.getItem("openjson.liveTextClientId") || "",
     offlineQueue: readOfflineQueue(),
+    saveRequestId: 0,
+    saving: false,
     autosaving: false,
     conflictLocalText: "",
     originalText: "",
@@ -792,6 +794,7 @@
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
     invalidateDocumentPanelRequests();
+    invalidateSaveRequests();
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
@@ -1246,6 +1249,9 @@
   }
 
   function setSelectedEditorState(editorState) {
+    if (state.selectedDocumentId && state.selectedDocumentId !== editorState.document.id) {
+      invalidateSaveRequests();
+    }
     state.selectedEditorState = editorState;
     state.selectedDocumentId = editorState.document.id;
     state.originalText = editorState.document.content_text;
@@ -1286,6 +1292,7 @@
     state.selectedDocumentId = "";
     invalidateCommentThreadsRequests();
     invalidateDocumentPanelRequests();
+    invalidateSaveRequests();
     state.originalText = "";
     state.liveTextShadow = "";
     state.liveTextRevision = 0;
@@ -1485,42 +1492,77 @@
 
   async function saveSelected(options) {
     const autosave = Boolean(options && options.autosave);
-    if (!state.selectedDocumentId || !state.syntaxValid || !state.dirty || state.autosaving) {
+    const documentId = state.selectedDocumentId;
+    const baseVersion = state.baseVersion;
+    const contentText = els.editorBuffer.value;
+    const mergeStrategy = state.autoMergeEnabled ? "auto" : "reject";
+    if (!documentId || !state.syntaxValid || !state.dirty || state.saving) {
       return;
     }
+    const requestId = state.saveRequestId + 1;
+    state.saveRequestId = requestId;
+    state.saving = true;
     state.autosaving = autosave;
     syncButtons();
+    const savePayload = {
+      document_id: documentId,
+      base_version: baseVersion,
+      content_text: contentText,
+      merge_strategy: mergeStrategy,
+      reason: autosave ? "Offline autosave from OpenJson UI" : "Offline save from OpenJson UI",
+    };
     try {
-      const result = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/content`, {
+      const result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/content`, {
         method: "PUT",
         body: {
-          base_version: state.baseVersion,
-          content_text: els.editorBuffer.value,
-          merge_strategy: state.autoMergeEnabled ? "auto" : "reject",
+          base_version: baseVersion,
+          content_text: contentText,
+          merge_strategy: mergeStrategy,
           reason: autosave ? "Autosaved from OpenJson UI" : "Saved from OpenJson UI",
         },
       });
+      if (!isCurrentSaveRequest(requestId, documentId, baseVersion, contentText)) {
+        return;
+      }
       const mergeLabel = result.auto_merged ? " with auto-merge" : "";
       setEditorStatus(`${autosave ? "Autosaved" : "Saved"} version ${result.current_version}${mergeLabel}.`, "ok");
-      sendRealtimeMessage({ type: "refresh", since_version: state.baseVersion || result.current_version - 1 });
-      await loadBootstrap(state.selectedDocumentId);
+      sendRealtimeMessage({ type: "refresh", since_version: baseVersion || result.current_version - 1 });
+      await loadBootstrap(documentId);
     } catch (error) {
-      if (!(error instanceof ApiError) && state.selectedDocumentId) {
-        queueOfflineSave({
-          document_id: state.selectedDocumentId,
-          base_version: state.baseVersion,
-          content_text: els.editorBuffer.value,
-          merge_strategy: state.autoMergeEnabled ? "auto" : "reject",
-          reason: autosave ? "Offline autosave from OpenJson UI" : "Offline save from OpenJson UI",
-        });
-        setEditorStatus(`Queued offline save. Pending: ${state.offlineQueue.length}.`, "info");
+      const currentRequest = isCurrentSaveRequest(requestId, documentId, baseVersion, contentText);
+      if (!(error instanceof ApiError)) {
+        queueOfflineSave(savePayload);
+        if (currentRequest) {
+          setEditorStatus(`Queued offline save. Pending: ${state.offlineQueue.length}.`, "info");
+        }
+        return;
+      }
+      if (!currentRequest) {
         return;
       }
       throw error;
     } finally {
-      state.autosaving = false;
-      syncButtons();
+      if (state.saveRequestId === requestId) {
+        state.saving = false;
+        state.autosaving = false;
+        syncButtons();
+      }
     }
+  }
+
+  function isCurrentSaveRequest(requestId, documentId, baseVersion, contentText) {
+    return (
+      state.saveRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.baseVersion === baseVersion &&
+      els.editorBuffer.value === contentText
+    );
+  }
+
+  function invalidateSaveRequests() {
+    state.saveRequestId += 1;
+    state.saving = false;
+    state.autosaving = false;
   }
 
   async function loadConflictPreview(error) {
@@ -1749,6 +1791,7 @@
         state.selectedDocumentId = "";
         invalidateCommentThreadsRequests();
         invalidateDocumentPanelRequests();
+        invalidateSaveRequests();
         state.liveTextShadow = "";
         state.liveTextRevision = 0;
         state.liveTextPendingOperation = false;
@@ -2671,7 +2714,7 @@
       state.createSchemaMatch.resolution &&
       state.createSchemaMatch.resolution.status === "ambiguous" &&
       !cleanOptional(els.schemaSelect.value);
-    const busy = state.loading || state.autosaving;
+    const busy = state.loading || state.saving || state.autosaving;
     els.signupButton.disabled = busy;
     els.loginButton.disabled = busy;
     els.logoutButton.disabled = busy || !state.token;
