@@ -115,6 +115,56 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("/schema-matches", js.text)
         self.assertIn("/imports/zip-preview", js.text)
         self.assertIn("/imports/zip-apply", js.text)
+        zip_file_handler = js.text.split('els.zipFileInput.addEventListener("change"', 1)[1].split(
+            "els.zipPreviewButton.addEventListener", 1
+        )[0]
+        self.assertIn("invalidateZipImportRequests()", zip_file_handler)
+        zip_preview = js.text.split("async function previewZipImport()", 1)[1].split(
+            "async function applyZipImport", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", zip_preview)
+        self.assertIn("const file = state.zipFile", zip_preview)
+        self.assertIn("const requestId = state.zipPreviewRequestId + 1", zip_preview)
+        self.assertIn("state.zipPreviewRequestId = requestId", zip_preview)
+        self.assertIn("state.zipPreviewing = true", zip_preview)
+        self.assertIn("const body = await file.arrayBuffer()", zip_preview)
+        self.assertIn("if (!isCurrentZipPreviewRequest(requestId, projectId, file))", zip_preview)
+        self.assertIn("/projects/${encodeURIComponent(projectId)}/imports/zip-preview", zip_preview)
+        self.assertIn("state.zipPreview = result", zip_preview)
+        zip_apply = js.text.split("async function applyZipImport()", 1)[1].split(
+            "async function readJsonFile", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", zip_apply)
+        self.assertIn("const file = state.zipFile", zip_apply)
+        self.assertIn("const preview = state.zipPreview", zip_apply)
+        self.assertIn("const selectedDocumentId = state.selectedDocumentId || \"\"", zip_apply)
+        self.assertIn("const requestId = state.zipApplyRequestId + 1", zip_apply)
+        self.assertIn("state.zipApplyRequestId = requestId", zip_apply)
+        self.assertIn("state.zipApplying = true", zip_apply)
+        self.assertIn("const body = await file.arrayBuffer()", zip_apply)
+        self.assertIn(
+            "if (!isCurrentZipApplyRequest(requestId, projectId, file, preview, selectedDocumentId))",
+            zip_apply,
+        )
+        self.assertIn("/projects/${encodeURIComponent(projectId)}/imports/zip-apply", zip_apply)
+        self.assertIn("Imported ${file.name} from OpenJson UI", zip_apply)
+        self.assertIn("await loadBootstrap(firstCreated ? firstCreated.id : selectedDocumentId || null)", zip_apply)
+        self.assertIn("function isCurrentZipPreviewRequest(requestId, projectId, file)", js.text)
+        self.assertIn("state.zipPreviewRequestId === requestId", js.text)
+        self.assertIn("state.zipFile === file", js.text)
+        self.assertIn(
+            "function isCurrentZipApplyRequest(requestId, projectId, file, preview, selectedDocumentId)",
+            js.text,
+        )
+        self.assertIn("state.zipApplyRequestId === requestId", js.text)
+        self.assertIn("state.zipPreview === preview", js.text)
+        self.assertIn("(state.selectedDocumentId || \"\") === selectedDocumentId", js.text)
+        self.assertIn("function invalidateZipImportRequests()", js.text)
+        self.assertIn("state.zipPreviewRequestId += 1", js.text)
+        self.assertIn("state.zipApplyRequestId += 1", js.text)
+        self.assertIn("function resetZipImportSelection(message)", js.text)
+        self.assertIn("state.zipPreviewing = false", js.text)
+        self.assertIn("state.zipApplying = false", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/members", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/usage", js.text)
         self.assertIn("/auth/signup", js.text)
@@ -321,7 +371,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function invalidateSaveRequests()", js.text)
         self.assertIn("state.saveRequestId += 1", js.text)
         self.assertIn("state.saving = false", js.text)
-        self.assertIn("const busy = state.loading || state.saving || state.rollingBack || state.autosaving", js.text)
+        self.assertIn("state.zipPreviewing || state.zipApplying", js.text)
         editor_state_setter = js.text.split("function setSelectedEditorState", 1)[1].split("function clearEditor", 1)[0]
         self.assertIn("state.selectedDocumentId !== editorState.document.id", editor_state_setter)
         self.assertIn("invalidateSaveRequests()", editor_state_setter)
@@ -404,9 +454,11 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function invalidateProjectHomeRequests()", js.text)
         self.assertIn("state.projectHomeRequestId += 1", js.text)
         self.assertIn("invalidateProjectDocumentsChangeRequests()", project_home_loader)
+        self.assertIn('resetZipImportSelection("No ZIP selected.")', project_home_loader)
         project_opener = js.text.split("async function openProject", 1)[1].split("function setProjectId", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", project_opener)
         self.assertIn("invalidateProjectDocumentsChangeRequests()", project_opener)
+        self.assertIn('resetZipImportSelection("No ZIP selected.")', project_opener)
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", session_clearer)
         self.assertIn("invalidateTeamMembersRequests()", session_clearer)
@@ -414,6 +466,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateSaveRequests()", session_clearer)
         self.assertIn("invalidateRollbackRequests()", session_clearer)
         self.assertIn("invalidateProjectDocumentsChangeRequests()", session_clearer)
+        self.assertIn('resetZipImportSelection("No ZIP selected.")', session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1
         )[0]

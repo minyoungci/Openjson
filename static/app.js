@@ -140,6 +140,10 @@
     schemaMatchRequestId: 0,
     zipFile: null,
     zipPreview: null,
+    zipPreviewRequestId: 0,
+    zipApplyRequestId: 0,
+    zipPreviewing: false,
+    zipApplying: false,
     presenceCursorTimer: null,
     activePresenceDocumentId: "",
     collaborationTimer: null,
@@ -274,6 +278,7 @@
 
     els.zipFileInput.addEventListener("change", () => {
       const file = els.zipFileInput.files && els.zipFileInput.files[0];
+      invalidateZipImportRequests();
       state.zipFile = file || null;
       state.zipPreview = null;
       if (state.zipFile) {
@@ -515,6 +520,7 @@
     state.projectHomeRequestId = requestId;
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
+    resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
     stopProjectWorkspaceSocket();
@@ -606,6 +612,7 @@
   async function openProject(projectId, selectedDocumentId) {
     invalidateProjectHomeRequests();
     invalidateProjectDocumentsChangeRequests();
+    resetZipImportSelection("No ZIP selected.");
     setProjectId(projectId);
     if (!selectedDocumentId) {
       state.selectedDocumentId = "";
@@ -798,6 +805,7 @@
     invalidateProjectHomeRequests();
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
+    resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
     invalidateDocumentPanelRequests();
@@ -1392,14 +1400,40 @@
   }
 
   async function previewZipImport() {
-    if (!state.zipFile) {
+    const projectId = state.projectId;
+    const file = state.zipFile;
+    if (!projectId || !file || state.zipPreviewing) {
       return;
     }
-    const result = await apiFetchBinary(`/projects/${encodeURIComponent(state.projectId)}/imports/zip-preview`, {
-      method: "POST",
-      body: await state.zipFile.arrayBuffer(),
-      contentType: "application/zip",
-    });
+    const requestId = state.zipPreviewRequestId + 1;
+    state.zipPreviewRequestId = requestId;
+    state.zipPreviewing = true;
+    syncButtons();
+    let result;
+    try {
+      const body = await file.arrayBuffer();
+      if (!isCurrentZipPreviewRequest(requestId, projectId, file)) {
+        return;
+      }
+      result = await apiFetchBinary(`/projects/${encodeURIComponent(projectId)}/imports/zip-preview`, {
+        method: "POST",
+        body,
+        contentType: "application/zip",
+      });
+    } catch (error) {
+      if (!isCurrentZipPreviewRequest(requestId, projectId, file)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.zipPreviewRequestId === requestId) {
+        state.zipPreviewing = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentZipPreviewRequest(requestId, projectId, file)) {
+      return;
+    }
     state.zipPreview = result;
     renderZipImportResult(result);
     syncButtons();
@@ -1410,15 +1444,43 @@
   }
 
   async function applyZipImport() {
-    if (!state.zipFile || !state.zipPreview || !state.zipPreview.can_apply) {
+    const projectId = state.projectId;
+    const file = state.zipFile;
+    const preview = state.zipPreview;
+    const selectedDocumentId = state.selectedDocumentId || "";
+    if (!projectId || !file || !preview || !preview.can_apply || state.zipApplying) {
       return;
     }
-    const result = await apiFetchBinary(`/projects/${encodeURIComponent(state.projectId)}/imports/zip-apply`, {
-      method: "POST",
-      query: { reason: `Imported ${state.zipFile.name} from OpenJson UI` },
-      body: await state.zipFile.arrayBuffer(),
-      contentType: "application/zip",
-    });
+    const requestId = state.zipApplyRequestId + 1;
+    state.zipApplyRequestId = requestId;
+    state.zipApplying = true;
+    syncButtons();
+    let result;
+    try {
+      const body = await file.arrayBuffer();
+      if (!isCurrentZipApplyRequest(requestId, projectId, file, preview, selectedDocumentId)) {
+        return;
+      }
+      result = await apiFetchBinary(`/projects/${encodeURIComponent(projectId)}/imports/zip-apply`, {
+        method: "POST",
+        query: { reason: `Imported ${file.name} from OpenJson UI` },
+        body,
+        contentType: "application/zip",
+      });
+    } catch (error) {
+      if (!isCurrentZipApplyRequest(requestId, projectId, file, preview, selectedDocumentId)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.zipApplyRequestId === requestId) {
+        state.zipApplying = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentZipApplyRequest(requestId, projectId, file, preview, selectedDocumentId)) {
+      return;
+    }
     state.zipPreview = result;
     renderZipImportResult(result);
     const firstCreated = result.created_documents && result.created_documents[0];
@@ -1426,7 +1488,38 @@
     els.zipFileInput.value = "";
     syncButtons();
     setEditorStatus(`Imported ${result.imported_count} JSON document(s).`, "ok");
-    await loadBootstrap(firstCreated ? firstCreated.id : state.selectedDocumentId || null);
+    await loadBootstrap(firstCreated ? firstCreated.id : selectedDocumentId || null);
+  }
+
+  function isCurrentZipPreviewRequest(requestId, projectId, file) {
+    return state.zipPreviewRequestId === requestId && state.projectId === projectId && state.zipFile === file;
+  }
+
+  function isCurrentZipApplyRequest(requestId, projectId, file, preview, selectedDocumentId) {
+    return (
+      state.zipApplyRequestId === requestId &&
+      state.projectId === projectId &&
+      state.zipFile === file &&
+      state.zipPreview === preview &&
+      (state.selectedDocumentId || "") === selectedDocumentId
+    );
+  }
+
+  function invalidateZipImportRequests() {
+    state.zipPreviewRequestId += 1;
+    state.zipApplyRequestId += 1;
+    state.zipPreviewing = false;
+    state.zipApplying = false;
+  }
+
+  function resetZipImportSelection(message) {
+    invalidateZipImportRequests();
+    state.zipFile = null;
+    state.zipPreview = null;
+    els.zipFileInput.value = "";
+    if (message) {
+      clearPanel(els.zipImportOutput, message);
+    }
   }
 
   async function readJsonFile(file) {
@@ -2845,7 +2938,8 @@
       state.createSchemaMatch.resolution &&
       state.createSchemaMatch.resolution.status === "ambiguous" &&
       !cleanOptional(els.schemaSelect.value);
-    const busy = state.loading || state.saving || state.rollingBack || state.autosaving;
+    const busy =
+      state.loading || state.saving || state.rollingBack || state.zipPreviewing || state.zipApplying || state.autosaving;
     els.signupButton.disabled = busy;
     els.loginButton.disabled = busy;
     els.logoutButton.disabled = busy || !state.token;

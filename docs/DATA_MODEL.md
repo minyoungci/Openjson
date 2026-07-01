@@ -284,6 +284,10 @@ and one append-only `document_events` `event_type = "create"` row at version
 precheck or write failure leaves no partial imported documents or events.
 Folder summaries and simple JSON-file reference edges are response projections
 computed from the ZIP archive and existing active document paths.
+TASK_167 stale ZIP import preview/apply guarding adds only browser memory state.
+The static client tracks ZIP preview/apply request ids and captured project,
+file, preview, and selected-document context before applying UI results. This
+does not persist import jobs or change ZIP import transaction semantics.
 TASK_101 editor presence is transient operational state. It stores active
 viewer/editor heartbeat data for one document and one actor, including
 `status`, `base_version`, `dirty`, optional `cursor_path`, `opened_at`, and

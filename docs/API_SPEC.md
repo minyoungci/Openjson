@@ -235,6 +235,9 @@ See `docs/TASK_165_PLAN.md` for guarding stale browser collaboration-state
 polling responses and failures after document switches or version changes.
 See `docs/TASK_166_PLAN.md` for guarding stale browser comment action failures
 and success statuses after document switches.
+See `docs/TASK_167_PLAN.md` for guarding stale browser ZIP import preview/apply
+responses after project switches, ZIP file changes, selected-document changes,
+or overlapping ZIP import actions.
 
 ## Deployment Version
 
@@ -530,6 +533,11 @@ success each JSON member is created through the normal document create pipeline
 as version `1` with an append-only `event_type = "create"` document event.
 This is not Git import/export and does not introduce branching, pull requests,
 merge resolution, background import jobs, or realtime collaboration.
+The static browser client applies ZIP preview/apply responses only when they
+still match the latest request, captured project id, ZIP `File` object, and for
+apply the captured preview object and selected document id. Project navigation
+or session clearing resets ZIP selection and ignores stale ZIP import successes
+or failures.
 Project usage is a read-only derived view over active document count and active
 latest snapshot bytes. Usage limits are optional deployment guards over active
 snapshot size, not billing, historical event-log accounting, hard deletion, or
