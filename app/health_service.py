@@ -89,6 +89,7 @@ def version_status(
             "backup_scheduler_retention_count": backup_scheduler_config.retention_count,
             "backup_scheduler_encrypt": backup_scheduler_config.encrypt,
             "backup_encryption_key_configured": backup_scheduler_config.encryption_key_configured,
+            "debug_error_details_enabled": _env_flag(_optional_env("OPENJSON_DEBUG_ERROR_DETAILS")),
             "redis_fanout_enabled": bool(_optional_env("OPENJSON_REDIS_URL")),
             "oidc_configured": all(
                 _optional_env(name)
@@ -226,3 +227,7 @@ def _optional_env(name: str) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _env_flag(raw: str | None) -> bool:
+    return bool(raw and raw.strip().lower() in {"1", "true", "yes", "on"})

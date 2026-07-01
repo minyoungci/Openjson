@@ -61,7 +61,8 @@ python scripts\release_preflight.py `
   --expect-commit <git-sha> `
   --expect-actor-header-allowed false `
   --expect-backup-scheduler-enabled true `
-  --expect-backup-encryption-key-configured true
+  --expect-backup-encryption-key-configured true `
+  --expect-debug-error-details-enabled false
 ```
 
 ## Exclusions

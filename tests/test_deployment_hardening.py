@@ -28,6 +28,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self._clear_rate_limit_env()
         self._clear_backup_scheduler_env()
         os.environ.pop("OPENJSON_CORS_ORIGINS", None)
+        os.environ.pop("OPENJSON_DEBUG_ERROR_DETAILS", None)
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = str(Path(self.tmp.name) / "test.sqlite3")
         init_db(self.db_path)
@@ -35,6 +36,7 @@ class DeploymentHardeningTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
         os.environ.pop("OPENJSON_CORS_ORIGINS", None)
+        os.environ.pop("OPENJSON_DEBUG_ERROR_DETAILS", None)
         self._clear_rate_limit_env()
         self._clear_backup_scheduler_env()
 
@@ -119,6 +121,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(version.json()["runtime_config"]["backup_scheduler_retention_count"], 7)
         self.assertFalse(version.json()["runtime_config"]["backup_scheduler_encrypt"])
         self.assertFalse(version.json()["runtime_config"]["backup_encryption_key_configured"])
+        self.assertFalse(version.json()["runtime_config"]["debug_error_details_enabled"])
         self.assertNotIn("do-not-leak", json.dumps(version.json()))
         self.assertEqual(ready.status_code, 200)
         self.assertEqual(ready.json()["status"], "ready")
@@ -203,11 +206,56 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(payload["runtime_config"]["backup_scheduler_retention_count"], 7)
         self.assertTrue(payload["runtime_config"]["backup_scheduler_encrypt"])
         self.assertTrue(payload["runtime_config"]["backup_encryption_key_configured"])
+        self.assertFalse(payload["runtime_config"]["debug_error_details_enabled"])
         self.assertTrue(payload["runtime_config"]["redis_fanout_enabled"])
         self.assertTrue(payload["runtime_config"]["oidc_configured"])
         self.assertNotIn("secret", json.dumps(payload))
         self.assertNotIn("/secret/db/path.sqlite3", json.dumps(payload))
         self.assertNotIn("/secret/backups", json.dumps(payload))
+
+    def test_unexpected_exception_response_hides_details_by_default(self) -> None:
+        app = create_app(self.db_path)
+
+        @app.get("/forced-unexpected-error")
+        def forced_unexpected_error() -> dict:
+            raise RuntimeError("leaked-secret-token at /data/openjson.sqlite3")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get(
+            "/forced-unexpected-error",
+            headers={"X-Request-Id": "req_forced_unexpected"},
+        )
+
+        self.assertEqual(response.status_code, 500)
+        body = response.json()
+        self.assertEqual(body["error"]["code"], ErrorCode.INTERNAL_ERROR)
+        self.assertEqual(body["error"]["message"], "Unexpected internal error.")
+        self.assertEqual(body["error"]["details"]["diagnostic_code"], "UNEXPECTED_EXCEPTION")
+        self.assertEqual(body["error"]["details"]["request_id"], "req_forced_unexpected")
+        self.assertNotIn("message", body["error"]["details"])
+        self.assertNotIn("error_type", body["error"]["details"])
+        self.assertNotIn("leaked-secret-token", json.dumps(body))
+        self.assertNotIn("/data/openjson.sqlite3", json.dumps(body))
+        self.assertEqual(response.headers["X-Request-Id"], "req_forced_unexpected")
+
+    def test_unexpected_exception_response_can_include_details_in_debug_mode(self) -> None:
+        with patch.dict(os.environ, {"OPENJSON_DEBUG_ERROR_DETAILS": "1"}, clear=False):
+            app = create_app(self.db_path)
+
+        @app.get("/forced-debug-error")
+        def forced_debug_error() -> dict:
+            raise RuntimeError("debug failure detail")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/forced-debug-error")
+
+        self.assertEqual(response.status_code, 500)
+        body = response.json()
+        self.assertEqual(body["error"]["code"], ErrorCode.INTERNAL_ERROR)
+        self.assertEqual(body["error"]["details"]["diagnostic_code"], "UNEXPECTED_EXCEPTION")
+        self.assertEqual(body["error"]["details"]["error_type"], "RuntimeError")
+        self.assertEqual(body["error"]["details"]["message"], "debug failure detail")
+        self.assertTrue(body["error"]["details"]["request_id"].startswith("req_"))
 
     def test_rate_limit_returns_standard_error_and_headers(self) -> None:
         with patch.dict(
@@ -417,6 +465,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn("*.sqlite3", dockerignore)
         self.assertIn("__pycache__/", dockerignore)
         self.assertIn("OPENJSON_ALLOW_ACTOR_HEADER", render_yaml)
+        self.assertIn("OPENJSON_DEBUG_ERROR_DETAILS", render_yaml)
         self.assertIn('value: "0"', render_yaml)
         self.assertIn("OPENJSON_RATE_LIMIT_ENABLED", render_yaml)
         self.assertIn("OPENJSON_RATE_LIMIT_REQUESTS", render_yaml)
@@ -467,6 +516,7 @@ class DeploymentHardeningTests(unittest.TestCase):
                 expect_actor_header_allowed=False,
                 expect_backup_scheduler_enabled=True,
                 expect_backup_encryption_key_configured=True,
+                expect_debug_error_details_enabled=False,
             )
 
         self.assertEqual(result["status"], "ok")
@@ -479,6 +529,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertTrue(result["version"]["runtime_config"]["backup_scheduler_enabled"])
         self.assertTrue(result["version"]["runtime_config"]["backup_scheduler_encrypt"])
         self.assertTrue(result["version"]["runtime_config"]["backup_encryption_key_configured"])
+        self.assertFalse(result["version"]["runtime_config"]["debug_error_details_enabled"])
         self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
         self.assertTrue(result["app"]["contains_openjson"])
         self.assertEqual(self._counts(), before)
@@ -649,6 +700,50 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(
             [diagnostic["code"] for diagnostic in result["diagnostics"]],
             ["BACKUP_ENCRYPTION_KEY_CONFIG_MISMATCH"],
+        )
+
+    def test_deployment_status_report_detects_debug_error_details_mismatch(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/health":
+                return httpx.Response(200, json={"status": "ok", "service": "openjson-api"})
+            if request.url.path == "/ready":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ready",
+                        "database": {
+                            "migrations": {
+                                "status": "ok",
+                            },
+                        },
+                    },
+                )
+            if request.url.path == "/version":
+                return httpx.Response(
+                    200,
+                    json={
+                        "service": "openjson-api",
+                        "source": {
+                            "git_commit": "abc123",
+                        },
+                        "runtime_config": {
+                            "actor_header_allowed": False,
+                            "backup_scheduler_enabled": True,
+                            "backup_encryption_key_configured": True,
+                            "debug_error_details_enabled": True,
+                        },
+                    },
+                )
+            return httpx.Response(200, headers={"content-type": "text/html"}, text="<title>OpenJson</title>")
+
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport, base_url="https://openjson.example") as client:
+            result = run_deployment_status_report(client, expect_debug_error_details_enabled=False)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(
+            [diagnostic["code"] for diagnostic in result["diagnostics"]],
+            ["DEBUG_ERROR_DETAILS_CONFIG_MISMATCH"],
         )
 
     def test_deployment_status_report_detects_ready_backup_scheduler_misconfiguration(self) -> None:

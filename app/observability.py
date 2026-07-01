@@ -23,6 +23,7 @@ def configure_request_observability(application: FastAPI, *, emit_logs: bool) ->
     @application.middleware("http")
     async def request_context_middleware(request: Request, call_next: Callable):
         request_id = request.headers.get(REQUEST_ID_HEADER) or _new_request_id()
+        request.state.request_id = request_id
         start = time.perf_counter()
         status_code = 500
         try:

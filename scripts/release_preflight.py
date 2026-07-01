@@ -17,7 +17,7 @@ from scripts.smoke_deployment_status import run_deployment_status_report
 
 
 CommandRunner = Callable[[list[str], Path], dict[str, Any]]
-DeploymentRunner = Callable[[str, str | None, bool | None, bool | None, bool | None], dict[str, Any]]
+DeploymentRunner = Callable[[str, str | None, bool | None, bool | None, bool | None, bool | None], dict[str, Any]]
 
 
 REQUIRED_DEPLOYMENT_FILES = (
@@ -51,6 +51,7 @@ REQUIRED_RENDER_SNIPPETS = {
     "db_path": "OPENJSON_DB_PATH",
     "public_base_url": "OPENJSON_PUBLIC_BASE_URL",
     "cors_origins": "OPENJSON_CORS_ORIGINS",
+    "debug_error_details": "OPENJSON_DEBUG_ERROR_DETAILS",
     "actor_header_disabled": "OPENJSON_ALLOW_ACTOR_HEADER",
     "http_rate_limit": "OPENJSON_RATE_LIMIT_ENABLED",
     "websocket_rate_limit": "OPENJSON_WS_RATE_LIMIT_ENABLED",
@@ -166,6 +167,25 @@ def _build_required_file_check(repo_root: Path) -> dict[str, Any]:
     )
 
 
+def _render_env_setting(text: str, key: str, setting: str) -> str | None:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != f"- key: {key}":
+            continue
+        for setting_line in lines[index + 1 :]:
+            stripped = setting_line.strip()
+            if stripped.startswith("- key: "):
+                break
+            prefix = f"{setting}:"
+            if stripped.startswith(prefix):
+                return stripped[len(prefix) :].strip().strip('"').strip("'")
+    return None
+
+
+def _render_env_value(text: str, key: str) -> str | None:
+    return _render_env_setting(text, key, "value")
+
+
 def _build_render_blueprint_check(repo_root: Path) -> dict[str, Any]:
     render_yaml = repo_root / "render.yaml"
     if not render_yaml.exists():
@@ -177,16 +197,19 @@ def _build_render_blueprint_check(repo_root: Path) -> dict[str, Any]:
         for key, snippet in REQUIRED_RENDER_SNIPPETS.items()
         if snippet not in text
     ]
-    actor_header_is_disabled = "OPENJSON_ALLOW_ACTOR_HEADER" in text and 'value: "0"' in text
+    actor_header_is_disabled = _render_env_value(text, "OPENJSON_ALLOW_ACTOR_HEADER") == "0"
     if not actor_header_is_disabled:
         missing.append({"key": "actor_header_value", "snippet": 'OPENJSON_ALLOW_ACTOR_HEADER value: "0"'})
-    backup_scheduler_is_enabled = "OPENJSON_BACKUP_SCHEDULER_ENABLED" in text and 'value: "1"' in text
+    debug_error_details_disabled = _render_env_value(text, "OPENJSON_DEBUG_ERROR_DETAILS") == "0"
+    if not debug_error_details_disabled:
+        missing.append({"key": "debug_error_details_value", "snippet": 'OPENJSON_DEBUG_ERROR_DETAILS value: "0"'})
+    backup_scheduler_is_enabled = _render_env_value(text, "OPENJSON_BACKUP_SCHEDULER_ENABLED") == "1"
     if not backup_scheduler_is_enabled:
         missing.append({"key": "backup_scheduler_value", "snippet": 'OPENJSON_BACKUP_SCHEDULER_ENABLED value: "1"'})
-    backup_encryption_is_enabled = "OPENJSON_BACKUP_ENCRYPT" in text and 'value: "1"' in text
+    backup_encryption_is_enabled = _render_env_value(text, "OPENJSON_BACKUP_ENCRYPT") == "1"
     if not backup_encryption_is_enabled:
         missing.append({"key": "backup_encrypt_value", "snippet": 'OPENJSON_BACKUP_ENCRYPT value: "1"'})
-    backup_key_is_secret = "OPENJSON_BACKUP_ENCRYPTION_KEY" in text and "sync: false" in text
+    backup_key_is_secret = _render_env_setting(text, "OPENJSON_BACKUP_ENCRYPTION_KEY", "sync") == "false"
     if not backup_key_is_secret:
         missing.append({"key": "backup_encryption_key_secret", "snippet": "OPENJSON_BACKUP_ENCRYPTION_KEY sync: false"})
 
@@ -206,6 +229,7 @@ def _run_deployment(
     expect_actor_header_allowed: bool | None,
     expect_backup_scheduler_enabled: bool | None,
     expect_backup_encryption_key_configured: bool | None,
+    expect_debug_error_details_enabled: bool | None,
 ) -> dict[str, Any]:
     with httpx.Client(base_url=base_url.rstrip("/"), timeout=20.0, follow_redirects=True) as client:
         return run_deployment_status_report(
@@ -214,6 +238,7 @@ def _run_deployment(
             expect_actor_header_allowed=expect_actor_header_allowed,
             expect_backup_scheduler_enabled=expect_backup_scheduler_enabled,
             expect_backup_encryption_key_configured=expect_backup_encryption_key_configured,
+            expect_debug_error_details_enabled=expect_debug_error_details_enabled,
         )
 
 
@@ -223,6 +248,7 @@ def _deployment_check(
     expect_actor_header_allowed: bool | None,
     expect_backup_scheduler_enabled: bool | None,
     expect_backup_encryption_key_configured: bool | None,
+    expect_debug_error_details_enabled: bool | None,
     deployment_runner: DeploymentRunner,
 ) -> dict[str, Any]:
     try:
@@ -232,6 +258,7 @@ def _deployment_check(
             expect_actor_header_allowed,
             expect_backup_scheduler_enabled,
             expect_backup_encryption_key_configured,
+            expect_debug_error_details_enabled,
         )
     except Exception as exc:  # pragma: no cover - depends on external network failures
         return _check(
@@ -281,7 +308,8 @@ def _next_actions(checks: dict[str, Any], *, base_url: str | None, latest_commit
             "After the manual Render deploy, run: "
             f"python scripts\\release_preflight.py --base-url https://openjson.thelumen.work "
             f"--expect-commit {commit_flag} --expect-actor-header-allowed false "
-            "--expect-backup-scheduler-enabled true --expect-backup-encryption-key-configured true"
+            "--expect-backup-scheduler-enabled true --expect-backup-encryption-key-configured true "
+            "--expect-debug-error-details-enabled false"
         )
 
     return actions
@@ -295,6 +323,7 @@ def build_release_preflight_report(
     expect_actor_header_allowed: bool | None = None,
     expect_backup_scheduler_enabled: bool | None = None,
     expect_backup_encryption_key_configured: bool | None = None,
+    expect_debug_error_details_enabled: bool | None = None,
     git_runner: CommandRunner = _run_command,
     deployment_runner: DeploymentRunner = _run_deployment,
 ) -> dict[str, Any]:
@@ -316,6 +345,7 @@ def build_release_preflight_report(
             expect_actor_header_allowed,
             expect_backup_scheduler_enabled,
             expect_backup_encryption_key_configured,
+            expect_debug_error_details_enabled,
             deployment_runner,
         )
 
@@ -336,6 +366,7 @@ def build_release_preflight_report(
             "expected_actor_header_allowed": expect_actor_header_allowed,
             "expected_backup_scheduler_enabled": expect_backup_scheduler_enabled,
             "expected_backup_encryption_key_configured": expect_backup_encryption_key_configured,
+            "expected_debug_error_details_enabled": expect_debug_error_details_enabled,
             "next_actions": next_actions,
         },
     }
@@ -361,6 +392,11 @@ def main() -> None:
         choices=("true", "false"),
         help="Expected /version runtime_config.backup_encryption_key_configured value for the deployment smoke.",
     )
+    parser.add_argument(
+        "--expect-debug-error-details-enabled",
+        choices=("true", "false"),
+        help="Expected /version runtime_config.debug_error_details_enabled value for the deployment smoke.",
+    )
     args = parser.parse_args()
 
     expected_actor_header_allowed = None
@@ -372,6 +408,9 @@ def main() -> None:
     expected_backup_encryption_key_configured = None
     if args.expect_backup_encryption_key_configured is not None:
         expected_backup_encryption_key_configured = args.expect_backup_encryption_key_configured == "true"
+    expected_debug_error_details_enabled = None
+    if args.expect_debug_error_details_enabled is not None:
+        expected_debug_error_details_enabled = args.expect_debug_error_details_enabled == "true"
 
     report = build_release_preflight_report(
         args.repo_root,
@@ -380,6 +419,7 @@ def main() -> None:
         expect_actor_header_allowed=expected_actor_header_allowed,
         expect_backup_scheduler_enabled=expected_backup_scheduler_enabled,
         expect_backup_encryption_key_configured=expected_backup_encryption_key_configured,
+        expect_debug_error_details_enabled=expected_debug_error_details_enabled,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     if report["status"] != "ok":

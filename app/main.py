@@ -75,7 +75,7 @@ from app.integrity_service import (
     check_project_event_chain_integrity,
     check_project_replay_integrity,
 )
-from app.observability import configure_request_observability
+from app.observability import REQUEST_ID_HEADER, configure_request_observability
 from app.offline_sync_service import apply_offline_sync_batch
 from app.project_usage_service import get_project_usage, project_usage_limit_config_from_env
 from app.rate_limit import (
@@ -151,6 +151,8 @@ ActorHeader = Annotated[str | None, Header(alias="X-Actor-Id")]
 EventActorQuery = Annotated[str | None, Query(alias="actor_id")]
 AuthorizationHeader = Annotated[str | None, Header(alias="Authorization")]
 
+DEBUG_ERROR_ENV = "OPENJSON_DEBUG_ERROR_DETAILS"
+
 
 def _parse_cors_origins(raw: str | None) -> list[str]:
     if not raw:
@@ -175,6 +177,31 @@ def _request_fields_set(request: object) -> set[str]:
     return set(getattr(request, "__fields_set__", set()))
 
 
+def _unexpected_error_details(request: Request | None, exc: Exception, *, debug: bool) -> dict:
+    request_id = None
+    if request is not None:
+        request_id = getattr(request.state, "request_id", request.headers.get(REQUEST_ID_HEADER))
+    details = {"diagnostic_code": "UNEXPECTED_EXCEPTION", "request_id": request_id}
+    if debug:
+        details.update(
+            {
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            }
+        )
+    return details
+
+
+def _error_response(request: Request | None, *, status_code: int, content: dict) -> JSONResponse:
+    response = JSONResponse(status_code=status_code, content=content)
+    request_id = None
+    if request is not None:
+        request_id = getattr(request.state, "request_id", request.headers.get(REQUEST_ID_HEADER))
+    if request_id:
+        response.headers[REQUEST_ID_HEADER] = request_id
+    return response
+
+
 def create_app(db_path: str | None = None) -> FastAPI:
     application = FastAPI(title="Collaborative JSON DB Workspace")
     application.state.db_path = db_path or os.environ.get("OPENJSON_DB_PATH", DEFAULT_DB_PATH)
@@ -183,6 +210,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         os.environ.get("OPENJSON_ALLOW_ACTOR_HEADER"),
         default=True,
     )
+    application.state.debug_error_details = _env_flag(os.environ.get(DEBUG_ERROR_ENV))
     collaboration_hub.configure(redis_url=os.environ.get("OPENJSON_REDIS_URL"))
     init_db(application.state.db_path)
     configure_api_token_authentication(
@@ -247,26 +275,30 @@ def create_app(db_path: str | None = None) -> FastAPI:
         await collaboration_hub.stop()
 
     @application.exception_handler(AppError)
-    async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code, content=exc.as_response())
+    async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+        return _error_response(request, status_code=exc.status_code, content=exc.as_response())
 
     @application.exception_handler(RequestValidationError)
-    async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
         app_error = AppError(
             ErrorCode.INVALID_JSON_SYNTAX,
             "Request body is invalid or malformed.",
             {"errors": exc.errors()},
         )
-        return JSONResponse(status_code=app_error.status_code, content=app_error.as_response())
+        return _error_response(request, status_code=app_error.status_code, content=app_error.as_response())
 
     @application.exception_handler(Exception)
-    async def unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
         app_error = AppError(
             ErrorCode.INTERNAL_ERROR,
             "Unexpected internal error.",
-            {"message": str(exc)},
+            _unexpected_error_details(
+                request,
+                exc,
+                debug=application.state.debug_error_details,
+            ),
         )
-        return JSONResponse(status_code=app_error.status_code, content=app_error.as_response())
+        return _error_response(request, status_code=app_error.status_code, content=app_error.as_response())
 
     @application.get("/health")
     def health_endpoint() -> dict:

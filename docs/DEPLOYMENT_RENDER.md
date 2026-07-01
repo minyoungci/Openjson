@@ -85,6 +85,7 @@ OPENJSON_MAX_REQUEST_BODY_BYTES=10485760
 OPENJSON_PROJECT_USAGE_LIMIT_ENABLED=1
 OPENJSON_MAX_PROJECT_DOCUMENTS=10000
 OPENJSON_MAX_PROJECT_SNAPSHOT_BYTES=104857600
+OPENJSON_DEBUG_ERROR_DETAILS=0
 ```
 
 `OPENJSON_ALLOW_ACTOR_HEADER=0` disables the development-only actor id fallback
@@ -106,6 +107,9 @@ Project usage limits reject create/save/restore/rollback/ZIP import mutations
 with `PROJECT_USAGE_LIMIT_EXCEEDED` before document event or snapshot writes.
 The default Render guard is 10,000 active documents and 100 MiB of active latest
 snapshot JSON per project.
+`OPENJSON_DEBUG_ERROR_DETAILS=0` keeps raw unexpected exception messages out of
+public API responses. Use `X-Request-Id` and service logs for correlation
+instead.
 
 For manual encrypted SQLite backups from the Render shell or an attached
 operational job, add a secret environment variable:
@@ -263,7 +267,8 @@ It should also report `operations.backup_scheduler.status=ok`. If it returns
 `runtime_config.rate_limit_enabled=true` and
 `runtime_config.websocket_rate_limit_enabled=true`, plus
 `runtime_config.request_body_limit_enabled=true` and
-`runtime_config.project_usage_limit_enabled=true`.
+`runtime_config.project_usage_limit_enabled=true`. It should show
+`runtime_config.debug_error_details_enabled=false` on public deployments.
 
 You can run the deployment status smoke from this repo:
 
@@ -273,7 +278,8 @@ python scripts\smoke_deployment_status.py `
   --expect-commit <git-sha> `
   --expect-actor-header-allowed false `
   --expect-backup-scheduler-enabled true `
-  --expect-backup-encryption-key-configured true
+  --expect-backup-encryption-key-configured true `
+  --expect-debug-error-details-enabled false
 ```
 
 The combined release/deployment preflight also checks local Git readiness,
@@ -284,7 +290,8 @@ python scripts\release_preflight.py `
   --base-url https://openjson.thelumen.work `
   --expect-actor-header-allowed false `
   --expect-backup-scheduler-enabled true `
-  --expect-backup-encryption-key-configured true
+  --expect-backup-encryption-key-configured true `
+  --expect-debug-error-details-enabled false
 ```
 
 The smoke prints structured JSON even when it fails. If the diagnostics include

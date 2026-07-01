@@ -159,6 +159,8 @@ scheduler.
 See `docs/TASK_128_PLAN.md` for encrypted scheduled-backup readiness
 hardening.
 See `docs/TASK_129_PLAN.md` for the read-only SQLite backup status check.
+See `docs/TASK_130_PLAN.md` for production-safe unexpected internal error
+responses.
 
 ## Deployment Version
 
@@ -192,6 +194,12 @@ It may include non-secret rate-limit flags:
 - `runtime_config.backup_scheduler_retention_count`
 - `runtime_config.backup_scheduler_encrypt`
 - `runtime_config.backup_encryption_key_configured`
+- `runtime_config.debug_error_details_enabled`
+
+Unexpected catch-all internal server errors return `INTERNAL_ERROR` with
+`details.diagnostic_code = "UNEXPECTED_EXCEPTION"` and a `request_id` by
+default. Raw exception messages are included only when
+`OPENJSON_DEBUG_ERROR_DETAILS=1` is set for local debugging.
 
 When enabled, oversized HTTP request bodies return `REQUEST_BODY_TOO_LARGE`
 with HTTP 413 before endpoint handlers parse or mutate application data.

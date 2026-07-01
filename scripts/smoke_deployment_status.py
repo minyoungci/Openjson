@@ -100,6 +100,7 @@ def run_deployment_status_report(
     expect_actor_header_allowed: bool | None = None,
     expect_backup_scheduler_enabled: bool | None = None,
     expect_backup_encryption_key_configured: bool | None = None,
+    expect_debug_error_details_enabled: bool | None = None,
 ) -> dict[str, Any]:
     checks = {
         "health": _probe_get(client, "/health"),
@@ -246,6 +247,18 @@ def run_deployment_status_report(
                         "actual": actual_backup_encryption_key_configured,
                     },
                 )
+        if expect_debug_error_details_enabled is not None:
+            actual_debug_error_details_enabled = version["runtime_config"].get("debug_error_details_enabled")
+            if actual_debug_error_details_enabled is not expect_debug_error_details_enabled:
+                _add_failure(
+                    diagnostics,
+                    code="DEBUG_ERROR_DETAILS_CONFIG_MISMATCH",
+                    message="The deployed debug error details setting does not match the expected value.",
+                    details={
+                        "expected": expect_debug_error_details_enabled,
+                        "actual": actual_debug_error_details_enabled,
+                    },
+                )
 
     app_body = checks["app"].get("body")
     app_text = app_body.get("text", "") if isinstance(app_body, dict) else ""
@@ -298,6 +311,7 @@ def run_deployment_status_smoke(
     expect_actor_header_allowed: bool | None = None,
     expect_backup_scheduler_enabled: bool | None = None,
     expect_backup_encryption_key_configured: bool | None = None,
+    expect_debug_error_details_enabled: bool | None = None,
 ) -> dict[str, Any]:
     health = _response_json(_get(client, "/health"))
     ready = _response_json(_get(client, "/ready"))
@@ -356,6 +370,16 @@ def run_deployment_status_smoke(
             ),
         )
 
+    if expect_debug_error_details_enabled is not None:
+        actual_debug_error_details_enabled = version["runtime_config"].get("debug_error_details_enabled")
+        _require(
+            actual_debug_error_details_enabled is expect_debug_error_details_enabled,
+            (
+                f"Expected debug_error_details_enabled={expect_debug_error_details_enabled}, "
+                f"got {actual_debug_error_details_enabled!r}"
+            ),
+        )
+
     return {
         "status": "ok",
         "health": health,
@@ -387,6 +411,11 @@ def main() -> None:
         choices=("true", "false"),
         help="Expected /version runtime_config.backup_encryption_key_configured value.",
     )
+    parser.add_argument(
+        "--expect-debug-error-details-enabled",
+        choices=("true", "false"),
+        help="Expected /version runtime_config.debug_error_details_enabled value.",
+    )
     args = parser.parse_args()
 
     expected_actor_header_allowed = None
@@ -398,6 +427,9 @@ def main() -> None:
     expected_backup_encryption_key_configured = None
     if args.expect_backup_encryption_key_configured is not None:
         expected_backup_encryption_key_configured = args.expect_backup_encryption_key_configured == "true"
+    expected_debug_error_details_enabled = None
+    if args.expect_debug_error_details_enabled is not None:
+        expected_debug_error_details_enabled = args.expect_debug_error_details_enabled == "true"
 
     with httpx.Client(base_url=args.base_url.rstrip("/"), timeout=20.0, follow_redirects=True) as client:
         result = run_deployment_status_report(
@@ -406,6 +438,7 @@ def main() -> None:
             expect_actor_header_allowed=expected_actor_header_allowed,
             expect_backup_scheduler_enabled=expected_backup_scheduler_enabled,
             expect_backup_encryption_key_configured=expected_backup_encryption_key_configured,
+            expect_debug_error_details_enabled=expected_debug_error_details_enabled,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
     if result["status"] != "ok":

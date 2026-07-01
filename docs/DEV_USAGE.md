@@ -65,6 +65,8 @@ scheduler readiness. A response is ready only when
 503 with the standard error envelope. If encrypted scheduled backups are
 enabled without `OPENJSON_BACKUP_ENCRYPTION_KEY`, `/ready` returns HTTP 503 with
 `operations.backup_scheduler.status = "misconfigured"`.
+`GET /version` exposes `runtime_config.debug_error_details_enabled`; this
+should be `false` for public deployments.
 
 Optional local usage limits:
 
@@ -170,7 +172,8 @@ python scripts\smoke_deployment_status.py `
   --expect-commit <git-sha> `
   --expect-actor-header-allowed false `
   --expect-backup-scheduler-enabled true `
-  --expect-backup-encryption-key-configured true
+  --expect-backup-encryption-key-configured true `
+  --expect-debug-error-details-enabled false
 ```
 
 Or run the combined release/deployment preflight:
@@ -180,7 +183,8 @@ python scripts\release_preflight.py `
   --base-url https://openjson.thelumen.work `
   --expect-actor-header-allowed false `
   --expect-backup-scheduler-enabled true `
-  --expect-backup-encryption-key-configured true
+  --expect-backup-encryption-key-configured true `
+  --expect-debug-error-details-enabled false
 ```
 
 This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
@@ -193,7 +197,8 @@ See `docs/TASK_122_PLAN.md` for the release preflight CLI and
 `--expect-backup-scheduler-enabled true` and
 `--expect-backup-encryption-key-configured true` for the Render daily backup
 scheduler check. TASK_128 also makes `/ready` fail when encrypted scheduled
-backups are enabled but the encryption key secret is missing.
+backups are enabled but the encryption key secret is missing. TASK_130 adds
+`--expect-debug-error-details-enabled false` for public deployment safety.
 If the official URL returns `VERSION_ENDPOINT_NOT_FOUND`, the custom domain is
 not yet serving a build that includes `/version`; trigger a manual Render deploy
 from the latest `main` commit and rerun the smoke.
@@ -686,6 +691,17 @@ Optional structured request logging:
 ```powershell
 $env:OPENJSON_REQUEST_LOGGING = "1"
 ```
+
+Optional local-only unexpected error details:
+
+```powershell
+$env:OPENJSON_DEBUG_ERROR_DETAILS = "1"
+```
+
+Leave this unset or set to `"0"` for public deployments. By default,
+unexpected internal errors return only `diagnostic_code = "UNEXPECTED_EXCEPTION"`
+and a `request_id`, not the raw exception message. See
+`docs/TASK_130_PLAN.md`.
 
 ## Seed Dev User, Workspace, Project
 

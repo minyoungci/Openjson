@@ -53,6 +53,8 @@ services:
         value: https://openjson.thelumen.work
       - key: OPENJSON_ALLOW_ACTOR_HEADER
         value: "0"
+      - key: OPENJSON_DEBUG_ERROR_DETAILS
+        value: "0"
       - key: OPENJSON_RATE_LIMIT_ENABLED
         value: "1"
       - key: OPENJSON_WS_RATE_LIMIT_ENABLED
@@ -120,6 +122,7 @@ class ReleasePreflightTests(unittest.TestCase):
         )
         self.assertIn("expect-backup-scheduler-enabled true", report["summary"]["next_actions"][0])
         self.assertIn("expect-backup-encryption-key-configured true", report["summary"]["next_actions"][0])
+        self.assertIn("expect-debug-error-details-enabled false", report["summary"]["next_actions"][0])
         self.assertIn("release_preflight.py", report["summary"]["next_actions"][0])
 
     def test_preflight_fails_when_backup_restore_drill_is_missing(self) -> None:
@@ -176,10 +179,35 @@ services:
         missing_keys = {item["key"] for item in report["checks"]["render_blueprint"]["details"]["missing"]}
         self.assertIn("db_path", missing_keys)
         self.assertIn("actor_header_value", missing_keys)
+        self.assertIn("debug_error_details", missing_keys)
+        self.assertIn("debug_error_details_value", missing_keys)
         self.assertIn("backup_scheduler", missing_keys)
         self.assertIn("backup_scheduler_value", missing_keys)
         self.assertIn("backup_encrypt_value", missing_keys)
         self.assertIn("backup_encryption_key_secret", missing_keys)
+
+    def test_preflight_fails_when_debug_error_details_are_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_runtime_files(root)
+            render_yaml = (root / "render.yaml").read_text(encoding="utf-8")
+            (root / "render.yaml").write_text(
+                render_yaml.replace(
+                    """      - key: OPENJSON_DEBUG_ERROR_DETAILS
+        value: "0"
+""",
+                    """      - key: OPENJSON_DEBUG_ERROR_DETAILS
+        value: "1"
+""",
+                ),
+                encoding="utf-8",
+            )
+
+            report = build_release_preflight_report(root, git_runner=_git_runner())
+
+        self.assertEqual(report["status"], "failed")
+        missing_keys = {item["key"] for item in report["checks"]["render_blueprint"]["details"]["missing"]}
+        self.assertIn("debug_error_details_value", missing_keys)
 
     def test_preflight_reports_stale_official_deployment_action(self) -> None:
         captured: dict[str, Any] = {}
@@ -190,6 +218,7 @@ services:
             expect_actor_header_allowed: bool | None,
             expect_backup_scheduler_enabled: bool | None,
             expect_backup_encryption_key_configured: bool | None,
+            expect_debug_error_details_enabled: bool | None,
         ) -> dict[str, Any]:
             captured.update(
                 {
@@ -198,6 +227,7 @@ services:
                     "expect_actor_header_allowed": expect_actor_header_allowed,
                     "expect_backup_scheduler_enabled": expect_backup_scheduler_enabled,
                     "expect_backup_encryption_key_configured": expect_backup_encryption_key_configured,
+                    "expect_debug_error_details_enabled": expect_debug_error_details_enabled,
                 }
             )
             return {
@@ -221,6 +251,7 @@ services:
                 expect_actor_header_allowed=False,
                 expect_backup_scheduler_enabled=True,
                 expect_backup_encryption_key_configured=True,
+                expect_debug_error_details_enabled=False,
                 git_runner=_git_runner(),
                 deployment_runner=deployment_runner,
             )
@@ -230,6 +261,7 @@ services:
         self.assertFalse(captured["expect_actor_header_allowed"])
         self.assertTrue(captured["expect_backup_scheduler_enabled"])
         self.assertTrue(captured["expect_backup_encryption_key_configured"])
+        self.assertFalse(captured["expect_debug_error_details_enabled"])
         self.assertEqual(report["checks"]["deployment_status"]["status"], "failed")
         self.assertEqual(report["checks"]["deployment_status"]["message"], "Deployment status smoke failed.")
         self.assertTrue(

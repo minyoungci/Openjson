@@ -366,6 +366,11 @@ latest backup age, manifest JSON, file existence, size, SHA-256, integrity
 status, and optional encryption policy without mutating SQLite rows or backup
 artifacts.
 
+TASK_130 unexpected internal error response hardening also adds no table. It
+changes only HTTP error serialization for catch-all unknown exceptions. Known
+`AppError` diagnostics remain structured; unknown exception responses expose a
+request id and diagnostic code by default instead of raw exception messages.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
