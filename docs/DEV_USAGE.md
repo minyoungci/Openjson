@@ -119,10 +119,12 @@ full-content saves on non-overlapping object paths. See
 `docs/TASK_103_PLAN.md`.
 The shell now also supports transient live text operations, live-text commit,
 local offline save queue flushing, refresh-token rotation, invite email delivery
-status, and full invite-link copy controls.
+status, full invite-link copy controls, and invite-link signup/login
+auto-accept.
 It is still not full offline-first replicated storage or general conflict
 auto-resolution. See `docs/TASK_104_PLAN.md`, `docs/TASK_107_PLAN.md`, and
-`docs/TASK_108_PLAN.md`.
+`docs/TASK_108_PLAN.md`. See `docs/TASK_109_PLAN.md` for invite-link
+onboarding.
 
 Local session and invitation smoke:
 
@@ -351,7 +353,9 @@ Local team UI smoke:
 2. In the Team panel, create an invite for the second user's email address.
 3. Copy the generated invite link or raw token.
 4. In another browser profile/window, open the invite link, sign up or log in
-   with the invited email address, and click Join.
+   with the invited email address, and confirm the app opens the invited
+   project after accepting the invite. If the wrong email is logged in, the
+   token remains available for manual retry.
 5. Open the same document in two browser windows with different logged-in
    users and confirm active users/checkpoints update through WebSocket with
    HTTP polling fallback.

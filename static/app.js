@@ -102,6 +102,7 @@
     refreshToken: localStorage.getItem("openjson.refreshToken") || "",
     userDisplayName: localStorage.getItem("openjson.userDisplayName") || "",
     userEmail: localStorage.getItem("openjson.userEmail") || "",
+    pendingInviteToken: initialParams.get("invite_token") || "",
     workspaces: [],
     availableProjects: [],
     projectHomeErrors: [],
@@ -168,9 +169,8 @@
     }
     els.pathPrefix.value = initialParams.get("path_prefix") || "";
     els.query.value = initialParams.get("q") || "";
-    const inviteToken = initialParams.get("invite_token");
-    if (inviteToken) {
-      els.projectInviteToken.value = inviteToken;
+    if (state.pendingInviteToken) {
+      els.projectInviteToken.value = state.pendingInviteToken;
     }
     bindEvents();
     syncButtons();
@@ -416,13 +416,17 @@
       await refreshAccessToken();
     }
     if (!state.token) {
-      showAuthScreen();
+      showAuthScreen(invitePromptText());
       return;
     }
     await enterAuthenticatedArea();
   }
 
   async function enterAuthenticatedArea() {
+    if (state.pendingInviteToken) {
+      await acceptPendingInvitation();
+      return;
+    }
     if (state.projectId) {
       try {
         await loadBootstrap(state.selectedDocumentId || null);
@@ -441,7 +445,7 @@
 
   async function loadProjectHome() {
     if (!state.token) {
-      showAuthScreen();
+      showAuthScreen(invitePromptText());
       return;
     }
     stopCollaborationLoop();
@@ -474,7 +478,7 @@
 
   async function createProjectFromGate() {
     if (!state.token) {
-      showAuthScreen();
+      showAuthScreen(invitePromptText());
       return;
     }
     const workspaceName = els.workspaceName.value.trim();
@@ -527,7 +531,7 @@
     els.projectScreen.classList.add("hidden");
     els.workspaceShell.classList.add("hidden");
     if (message) {
-      renderText(els.authOutput, message, "muted");
+      clearPanel(els.authOutput, message);
     }
     syncAccountLabels();
   }
@@ -537,7 +541,7 @@
     els.projectScreen.classList.remove("hidden");
     els.workspaceShell.classList.add("hidden");
     if (message) {
-      renderText(els.projectSetupOutput, message, "muted");
+      clearPanel(els.projectSetupOutput, message);
     }
     syncAccountLabels();
   }
@@ -632,19 +636,20 @@
 
   async function logoutSession() {
     if (!state.token) {
-      clearSessionState();
+      clearSessionState({ preserveInvite: Boolean(state.pendingInviteToken) });
       renderText(els.authOutput, "Session cleared.", "muted");
       syncButtons();
       return;
     }
+    const preserveInvite = Boolean(state.pendingInviteToken);
     await apiFetch("/auth/logout", {
       method: "POST",
     });
-    clearSessionState();
+    clearSessionState({ preserveInvite });
     renderText(els.authOutput, "Signed out.", "muted");
     restartCollaborationLoop();
     syncButtons();
-    showAuthScreen("Signed out.");
+    showAuthScreen(preserveInvite ? invitePromptText() : "Signed out.");
   }
 
   function applyAuthenticatedSession(result) {
@@ -670,7 +675,9 @@
     syncAccountLabels();
   }
 
-  function clearSessionState() {
+  function clearSessionState(options) {
+    const preserveInvite = Boolean(options && options.preserveInvite);
+    const inviteToken = preserveInvite ? state.pendingInviteToken || els.projectInviteToken.value.trim() : "";
     state.actorId = "";
     state.token = "";
     state.refreshToken = "";
@@ -684,12 +691,48 @@
     els.token.value = "";
     els.actorId.value = "";
     els.projectId.value = "";
-    clearInviteResult();
+    if (preserveInvite && inviteToken) {
+      state.pendingInviteToken = inviteToken;
+      els.projectInviteToken.value = inviteToken;
+    } else {
+      state.pendingInviteToken = "";
+      els.projectInviteToken.value = "";
+      clearInviteResult();
+    }
     localStorage.removeItem("openjson.token");
     localStorage.removeItem("openjson.refreshToken");
     localStorage.removeItem("openjson.actorId");
     localStorage.removeItem("openjson.projectId");
     localStorage.removeItem("openjson.selectedDocumentId");
+  }
+
+  function invitePromptText() {
+    return state.pendingInviteToken
+      ? "Sign up or log in with the invited email address to join this project."
+      : undefined;
+  }
+
+  async function acceptPendingInvitation() {
+    const token = state.pendingInviteToken || els.projectInviteToken.value.trim();
+    if (!token) {
+      await loadProjectHome();
+      return;
+    }
+    state.pendingInviteToken = token;
+    els.projectInviteToken.value = token;
+    showProjectScreen("Joining invited project...");
+    try {
+      const result = await acceptInvitationToken(token);
+      state.pendingInviteToken = "";
+      els.projectInviteToken.value = "";
+      renderText(els.projectSetupOutput, `Joined project as ${result.member.role}.`, "ok-text");
+      await openProject(result.invitation.project_id, null);
+    } catch (error) {
+      showProjectScreen();
+      clearPanel(els.projectList, "Invite token is ready for manual retry.");
+      renderError(els.projectSetupOutput, error);
+      syncButtons();
+    }
   }
 
   async function loadBootstrap(selectedDocumentId) {
@@ -849,15 +892,20 @@
       renderText(els.projectSetupOutput, "Invite token is required.", "error-text");
       return;
     }
-    const result = await apiFetch("/invitations/accept", {
+    const result = await acceptInvitationToken(token);
+    state.pendingInviteToken = "";
+    renderText(els.projectSetupOutput, `Joined project as ${result.member.role}.`, "ok-text");
+    els.projectInviteToken.value = "";
+    await openProject(result.invitation.project_id, null);
+  }
+
+  async function acceptInvitationToken(token) {
+    return apiFetch("/invitations/accept", {
       method: "POST",
       body: {
         token,
       },
     });
-    renderText(els.projectSetupOutput, `Joined project as ${result.member.role}.`, "ok-text");
-    els.projectInviteToken.value = "";
-    await openProject(result.invitation.project_id, null);
   }
 
   function buildShareUrl() {

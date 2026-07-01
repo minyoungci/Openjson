@@ -115,6 +115,8 @@ See `docs/TASK_104_PLAN.md` for transient text collaboration, invitation
 email delivery, refresh-token rotation, OIDC SSO, and offline sync.
 See `docs/TASK_107_PLAN.md` for invitation email delivery status rendering.
 See `docs/TASK_108_PLAN.md` for full invite-link display and copy controls.
+See `docs/TASK_109_PLAN.md` for invite-link signup/login auto-accept
+onboarding.
 
 ## Bootstrap, Workspace, Project
 

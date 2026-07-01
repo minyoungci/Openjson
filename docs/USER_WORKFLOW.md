@@ -15,7 +15,9 @@ Project owners/admins can invite teammates by email from the Team panel. If the
 deployment is configured with SMTP, OpenJson sends the invitation email
 immediately. The generated invite link and raw invite token remain visible as
 fallback join paths, so a teammate can open the official app URL, sign up or log
-in with the invited email address, and join the project.
+in with the invited email address, and join the project. Invite links are carried
+through signup/login and accepted automatically when the authenticated email
+matches the invitation.
 
 ## How Saving Works
 
