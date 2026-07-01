@@ -247,6 +247,9 @@ or target form/buffer changes.
 See `docs/TASK_170_PLAN.md` for guarding stale browser project-creation
 responses after session changes, project navigation, create-panel closes, or
 create-form changes.
+See `docs/TASK_171_PLAN.md` for guarding stale browser project-invitation
+responses after session changes, project navigation, project reloads, or
+invite-form changes.
 
 ## Deployment Version
 
@@ -715,6 +718,13 @@ Manual team member refreshes in the static browser are applied only when the
 response still belongs to the latest member refresh request for the active
 project id. Returning to project selection or clearing session state invalidates
 outstanding member refreshes.
+Project-invitation creation responses in the static browser are applied only
+when they still match the latest invite request, captured session user id,
+active project id, invite email input, and invite role input. Project-home
+loading, project opening, project bootstrap reloads, session clearing, or
+editing the invite form invalidates outstanding invite creates, and stale
+successes or failures are ignored instead of rendering invite tokens, invite
+links, or email delivery status into the current team panel.
 Project-creation responses in the static browser are applied only when they
 still match the latest create request, captured actor id, visible create panel,
 workspace name input, project name input, and project description input.

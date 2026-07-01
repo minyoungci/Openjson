@@ -577,6 +577,12 @@ workspace, project, description, and panel visibility context before applying
 create results or failures. This does not alter workspace/project transactions,
 memberships, permissions, canonical snapshots, or append-only
 `document_events`.
+TASK_171 stale project invitation response guarding also adds no table. The
+static browser client tracks project-invite request ids and captured session
+user, project, email, and role context before applying invite tokens, links, or
+delivery statuses. This does not alter invitation transactions, email delivery,
+memberships, permissions, canonical snapshots, or append-only
+`document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

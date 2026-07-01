@@ -132,6 +132,7 @@
     projectMembers: [],
     memberListError: null,
     teamMembersRequestId: 0,
+    projectInviteRequestId: 0,
     projectUsage: null,
     projectUsageError: null,
     commentThreads: [],
@@ -178,6 +179,7 @@
     saving: false,
     rollingBack: false,
     creatingProject: false,
+    creatingInvite: false,
     autosaving: false,
     conflictLocalText: "",
     originalText: "",
@@ -326,6 +328,16 @@
 
     els.createInviteButton.addEventListener("click", () => {
       createProjectInvite().catch((error) => renderError(els.teamActionOutput, error));
+    });
+
+    els.inviteEmail.addEventListener("input", () => {
+      invalidateProjectInviteRequests();
+      syncButtons();
+    });
+
+    els.inviteRole.addEventListener("change", () => {
+      invalidateProjectInviteRequests();
+      syncButtons();
     });
 
     els.copyInviteLinkButton.addEventListener("click", () => {
@@ -563,6 +575,7 @@
     invalidateCreateDocumentRequests();
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
+    invalidateProjectInviteRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
@@ -696,6 +709,7 @@
     invalidateCreateDocumentRequests();
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
+    invalidateProjectInviteRequests();
     resetZipImportSelection("No ZIP selected.");
     setProjectId(projectId);
     if (!selectedDocumentId) {
@@ -893,6 +907,7 @@
     invalidateCreateDocumentRequests();
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
+    invalidateProjectInviteRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
@@ -959,6 +974,7 @@
     state.bootstrapRequestId = requestId;
     invalidateCreateFileImportRequests();
     invalidateEditorFileImportRequests();
+    invalidateProjectInviteRequests();
     state.loading = true;
     syncButtons();
     const params = {
@@ -1101,22 +1117,64 @@
   }
 
   async function createProjectInvite() {
-    const email = els.inviteEmail.value.trim();
+    const projectId = state.projectId;
+    const sessionUserId = state.userId;
+    const emailText = els.inviteEmail.value;
+    const email = emailText.trim();
     const role = els.inviteRole.value;
-    if (!state.projectId || !email) {
+    if (!projectId || !sessionUserId || !email) {
       renderText(els.teamActionOutput, "Project ID and invite email are required.", "error-text");
       return;
     }
-    const invitation = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/invitations`, {
-      method: "POST",
-      body: {
-        email,
-        role,
-      },
-    });
+    if (state.creatingInvite) {
+      return;
+    }
+    const requestId = state.projectInviteRequestId + 1;
+    state.projectInviteRequestId = requestId;
+    state.creatingInvite = true;
+    syncButtons();
+    let invitation;
+    try {
+      invitation = await apiFetch(`/projects/${encodeURIComponent(projectId)}/invitations`, {
+        method: "POST",
+        body: {
+          email,
+          role,
+        },
+      });
+    } catch (error) {
+      if (!isCurrentProjectInviteRequest(requestId, projectId, sessionUserId, emailText, role)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.projectInviteRequestId === requestId) {
+        state.creatingInvite = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentProjectInviteRequest(requestId, projectId, sessionUserId, emailText, role)) {
+      return;
+    }
     els.inviteToken.value = invitation.token || "";
     updateInviteLinkField();
     renderInvitationResult(invitation);
+  }
+
+  function isCurrentProjectInviteRequest(requestId, projectId, sessionUserId, emailText, role) {
+    return (
+      state.projectInviteRequestId === requestId &&
+      state.projectId === projectId &&
+      state.userId === sessionUserId &&
+      els.inviteEmail.value === emailText &&
+      els.inviteRole.value === role
+    );
+  }
+
+  function invalidateProjectInviteRequests() {
+    state.projectInviteRequestId += 1;
+    state.creatingInvite = false;
+    syncButtons();
   }
 
   function renderInvitationResult(invitation) {
@@ -3157,6 +3215,7 @@
       state.saving ||
       state.rollingBack ||
       state.creatingProject ||
+      state.creatingInvite ||
       state.creatingDocument ||
       state.zipPreviewing ||
       state.zipApplying ||
@@ -3178,6 +3237,8 @@
     els.zipApplyButton.disabled = busy || !state.zipFile || !state.zipPreview || !state.zipPreview.can_apply;
     els.refreshTeamButton.disabled = busy || !state.projectId;
     els.createInviteButton.disabled = busy || !state.projectId;
+    els.inviteEmail.disabled = busy || !state.projectId;
+    els.inviteRole.disabled = busy || !state.projectId;
     els.copyInviteLinkButton.disabled = busy || !els.inviteLink.value.trim();
     els.acceptInviteButton.disabled = busy || !els.projectInviteToken.value.trim();
     els.createDocumentButton.disabled = busy || Boolean(ambiguousSchema);
