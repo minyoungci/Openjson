@@ -402,6 +402,14 @@ arrive, and re-diffs it against the authoritative session shadow after local
 acknowledgement. It does not change canonical snapshots, append-only
 `document_events`, rollback, replay, or content save contracts.
 
+TASK_136 live-text session-state reconnect preservation also adds no table.
+`text_session.state` remains authoritative in-process session data; the static
+browser UI preserves dirty or previously pending local editor text when that
+state arrives, clears stale pending state, and re-diffs the local buffer against
+the authoritative session shadow. Clean buffers still adopt the server session
+text. No canonical JSON storage, snapshots, or append-only events are changed
+until `text_session.commit` succeeds.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -1826,11 +1826,20 @@
   }
 
   function applyLiveTextState(payload) {
+    const sessionText = payload.content_text || "";
+    const hasLocalLiveTextBuffer =
+      state.liveTextPendingOperation || state.liveTextShadow !== els.editorBuffer.value;
     state.liveTextRevision = payload.text_revision || 0;
-    state.liveTextShadow = payload.content_text || "";
+    state.liveTextShadow = sessionText;
     state.liveTextPendingOperation = false;
+    if (hasLocalLiveTextBuffer) {
+      updateSyntaxState();
+      scheduleLiveTextDiffIfNeeded();
+      setEditorStatus(`Live text session rejoined at r${state.liveTextRevision}. Local buffer preserved and syncing.`, "info");
+      return;
+    }
     state.liveTextApplyingRemote = true;
-    els.editorBuffer.value = state.liveTextShadow;
+    els.editorBuffer.value = sessionText;
     state.liveTextApplyingRemote = false;
     updateSyntaxState();
     setEditorStatus(`Live text session joined at r${state.liveTextRevision}.`, "ok");

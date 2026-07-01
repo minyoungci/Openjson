@@ -171,6 +171,8 @@ See `docs/TASK_134_PLAN.md` for authoritative accepted text-session payload
 resynchronization.
 See `docs/TASK_135_PLAN.md` for browser live-text local-buffer preservation
 when remote accepted operations arrive during local typing.
+See `docs/TASK_136_PLAN.md` for browser live-text local-buffer preservation
+when session state arrives during join or reconnect.
 
 ## Deployment Version
 
@@ -509,6 +511,10 @@ editor buffer, realigns its live-text shadow to the server session, and sends a
 fresh diff after pending local acknowledgement. This is transient client state
 only; committed JSON still becomes durable solely through the existing content
 save pipeline and append-only document events.
+The same local-buffer preservation applies when the browser receives
+`text_session.state` during join, reconnect, or retry. A clean editor buffer is
+updated to the server session text; a dirty or previously pending local buffer
+is preserved and re-diffed against the authoritative session text.
 
 Offline sync accepts a batch of queued client content-save operations:
 
