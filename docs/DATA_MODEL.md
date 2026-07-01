@@ -519,6 +519,13 @@ payload check before refreshing derived project bootstrap state. This changes
 only transient browser behavior and does not create a project event store,
 alter canonical snapshots, or mutate append-only `document_events`.
 
+TASK_154 document collaboration WebSocket message guarding also adds no table.
+The static browser client ignores all document collaboration WebSocket
+messages from stale socket instances before parsing or applying payloads. This
+protects transient browser collaboration, live-text, and error-rendering state
+without changing `editor_presence`, canonical snapshots, append-only
+`document_events`, or in-process server text sessions.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

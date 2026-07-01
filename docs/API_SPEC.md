@@ -206,6 +206,8 @@ after socket replacement or document switches.
 See `docs/TASK_153_PLAN.md` for fixing the browser project workspace
 WebSocket message guard so project document-list updates are scoped to the
 active project socket.
+See `docs/TASK_154_PLAN.md` for guarding stale browser document collaboration
+WebSocket messages after socket replacement or document switches.
 
 ## Deployment Version
 
@@ -568,6 +570,10 @@ The static browser client processes live-text WebSocket payloads only from the
 currently active document socket and applies `text_session.state` or
 `text_session.committed` only when the payload `document_id` still matches the
 selected document.
+The static browser client also ignores every document collaboration WebSocket
+message from sockets that are no longer the active document socket, so stale
+socket errors or operational payloads cannot mutate the current browser
+collaboration state after a document switch or reconnect.
 When a remote accepted operation arrives while the static browser client has
 unsent or unacknowledged local text, the browser preserves the visible local
 editor buffer, realigns its live-text shadow to the server session, and sends a

@@ -1889,6 +1889,9 @@
     });
 
     socket.addEventListener("message", (event) => {
+      if (state.collaborationSocket !== socket) {
+        return;
+      }
       let payload;
       try {
         payload = JSON.parse(event.data);

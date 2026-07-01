@@ -189,6 +189,10 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("session_reset", js.text)
         self.assertIn("if (payload.document_id !== state.selectedDocumentId)", js.text)
         self.assertIn("loadBootstrap(payload.document_id)", js.text)
+        collaboration_socket_handler = js.text.split("function openCollaborationSocket()", 1)[1].split(
+            "function sendRealtimeMessage", 1
+        )[0]
+        self.assertIn("if (state.collaborationSocket !== socket)", collaboration_socket_handler)
         self.assertIn("markLiveTextOperationUnacknowledged", js.text)
         self.assertIn("resyncLiveTextSessionAfterConflict", js.text)
         self.assertIn("Live text change is still syncing.", js.text)
