@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.database import init_db
+from app.database import KNOWN_SCHEMA_MIGRATIONS, SCHEMA_SQL, connect, init_db, utc_now
 from app.errors import AppError, ErrorCode
 from app.health_service import readiness_status, version_status
 from app.main import create_app
@@ -77,6 +77,11 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(ready.json()["status"], "ready")
         self.assertTrue(ready.json()["database"]["connected"])
         self.assertTrue(ready.json()["database"]["foreign_keys_enabled"])
+        self.assertEqual(ready.json()["database"]["migrations"]["status"], "ok")
+        self.assertEqual(
+            ready.json()["database"]["migrations"]["current_schema_version"],
+            KNOWN_SCHEMA_MIGRATIONS[-1][0],
+        )
         self.assertIn("api_tokens", ready.json()["database"]["required_tables"])
         self.assertIn("user_credentials", ready.json()["database"]["required_tables"])
         self.assertIn("user_sessions", ready.json()["database"]["required_tables"])
@@ -126,6 +131,42 @@ class DeploymentHardeningTests(unittest.TestCase):
         response = raised.exception.as_response()
         self.assertEqual(response["error"]["code"], ErrorCode.INTERNAL_ERROR)
         self.assertIn("missing_tables", response["error"]["details"]["database"])
+
+    def test_ready_failure_reports_pending_migrations(self) -> None:
+        pending_db = str(Path(self.tmp.name) / "pending.sqlite3")
+        with connect(pending_db) as conn:
+            conn.executescript(SCHEMA_SQL)
+
+        with self.assertRaises(AppError) as raised:
+            readiness_status(pending_db)
+
+        response = raised.exception.as_response()
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(response["error"]["code"], ErrorCode.INTERNAL_ERROR)
+        self.assertEqual(response["error"]["details"]["database"]["missing_tables"], [])
+        migrations = response["error"]["details"]["database"]["migrations"]
+        self.assertEqual(migrations["status"], "pending")
+        self.assertEqual(migrations["applied_count"], 0)
+        self.assertEqual(migrations["pending_migrations"], [migration_id for migration_id, _ in KNOWN_SCHEMA_MIGRATIONS])
+
+    def test_ready_failure_reports_migration_drift(self) -> None:
+        with connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO schema_migrations (id, description, applied_at)
+                VALUES (?, ?, ?)
+                """,
+                ("9999_unknown_ready_drift", "Unexpected readiness drift.", utc_now()),
+            )
+
+        client = TestClient(create_app(self.db_path))
+        response = client.get("/ready")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["error"]["code"], ErrorCode.INTERNAL_ERROR)
+        migrations = response.json()["error"]["details"]["database"]["migrations"]
+        self.assertEqual(migrations["status"], "drift")
+        self.assertEqual(migrations["unknown_migrations"], ["9999_unknown_ready_drift"])
 
     def test_init_db_script_is_idempotent(self) -> None:
         script_db = str(Path(self.tmp.name) / "script.sqlite3")
@@ -203,6 +244,7 @@ class DeploymentHardeningTests(unittest.TestCase):
             )
 
         self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["ready"]["database"]["migrations"]["status"], "ok")
         self.assertEqual(result["version"]["source"]["git_commit"], "smoke-sha")
         self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
         self.assertTrue(result["app"]["contains_openjson"])

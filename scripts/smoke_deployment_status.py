@@ -42,11 +42,17 @@ def run_deployment_status_smoke(
     expect_actor_header_allowed: bool | None = None,
 ) -> dict[str, Any]:
     health = _response_json(_get(client, "/health"))
+    ready = _response_json(_get(client, "/ready"))
     version = _response_json(_get(client, "/version"))
     app = _get(client, "/app")
 
     _require(health.get("status") == "ok", f"Unexpected health payload: {health}")
     _require(health.get("service") == "openjson-api", f"Unexpected health service: {health}")
+    _require(ready.get("status") == "ready", f"Unexpected readiness payload: {ready}")
+    _require(
+        ready.get("database", {}).get("migrations", {}).get("status") == "ok",
+        f"Readiness migration ledger is not ok: {ready}",
+    )
     _require(version.get("service") == "openjson-api", f"Unexpected version service: {version}")
     _require("source" in version and isinstance(version["source"], dict), "Version payload missing source block.")
     _require(
@@ -73,6 +79,7 @@ def run_deployment_status_smoke(
     return {
         "status": "ok",
         "health": health,
+        "ready": ready,
         "version": version,
         "app": {
             "content_type": app.headers.get("content-type"),

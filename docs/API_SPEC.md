@@ -138,6 +138,7 @@ See `docs/TASK_112_PLAN.md` for the production entry UX cleanup that removes
 developer identity fallback from the static browser app.
 See `docs/TASK_113_PLAN.md` for the deployment auth fallback gate.
 See `docs/TASK_114_PLAN.md` for the public deployment version surface.
+See `docs/TASK_115_PLAN.md` for the readiness migration gate.
 
 ## Deployment Version
 
@@ -153,6 +154,14 @@ used for manual deploy verification:
 
 It must not expose secrets, database paths, API tokens, session tokens, SMTP
 passwords, or OIDC client secrets.
+
+## Deployment Readiness
+
+`GET /ready` is public and read-only. It verifies the SQLite connection,
+required table set, `PRAGMA foreign_keys = ON`, and schema migration ledger.
+When the migration ledger has pending known migrations or unknown drift rows,
+the endpoint returns HTTP 503 with the standard `INTERNAL_ERROR` envelope and
+`error.details.database.migrations`.
 
 ## Bootstrap, Workspace, Project
 

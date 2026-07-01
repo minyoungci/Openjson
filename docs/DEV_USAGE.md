@@ -59,6 +59,10 @@ Deployment smoke endpoints:
 - `GET /version`
 - `GET /ready`
 
+`GET /ready` also checks the schema migration ledger. A response is ready only
+when `database.migrations.status` is `ok`; pending or drifted migrations return
+HTTP 503 with the standard error envelope.
+
 ## Operational Smoke Commands
 
 Non-realtime shared edit HTTP smoke:
@@ -118,8 +122,9 @@ python scripts\smoke_deployment_status.py `
   --expect-actor-header-allowed false
 ```
 
-This smoke checks `/health`, `/version`, and `/app`. It is read-only and does
-not create users, projects, documents, or events. See `docs/TASK_114_PLAN.md`.
+This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
+and does not create users, projects, documents, or events. See
+`docs/TASK_114_PLAN.md` and `docs/TASK_115_PLAN.md`.
 
 Local non-realtime editor shell:
 

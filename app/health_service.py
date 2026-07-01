@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from app.database import connect
+from app.database import connect, get_schema_migration_status
 from app.errors import AppError, ErrorCode
 
 
@@ -115,12 +115,29 @@ def readiness_status(db_path: str) -> dict[str, Any]:
             status_code=503,
         )
 
+    migrations = get_schema_migration_status(db_path)
+    if migrations["status"] != "ok":
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR,
+            "Readiness check failed.",
+            {
+                "database": {
+                    "connected": True,
+                    "foreign_keys_enabled": True,
+                    "missing_tables": [],
+                    "migrations": migrations,
+                }
+            },
+            status_code=503,
+        )
+
     return {
         "status": "ready",
         "database": {
             "connected": True,
             "foreign_keys_enabled": True,
             "required_tables": sorted(REQUIRED_TABLES),
+            "migrations": migrations,
         },
     }
 

@@ -139,9 +139,14 @@ After the service is live:
 
 ```text
 GET https://openjson.thelumen.work/health
+GET https://openjson.thelumen.work/ready
 GET https://openjson.thelumen.work/version
 GET https://openjson.thelumen.work/app
 ```
+
+`/ready` should report `database.migrations.status=ok`. If it returns 503 with
+pending or drifted migrations, run the current migration/init flow against the
+persistent database before treating the deploy as live.
 
 `/version` should show the deployed Git commit from Render's
 `RENDER_GIT_COMMIT` default environment variable and
