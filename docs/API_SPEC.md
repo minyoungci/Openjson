@@ -119,6 +119,8 @@ See `docs/TASK_109_PLAN.md` for invite-link signup/login auto-accept
 onboarding.
 See `docs/TASK_110_PLAN.md` for the local Notes panel over existing comment
 thread APIs.
+See `docs/TASK_111_PLAN.md` for the team workspace smoke covering signup,
+invite, edit checkpoint, notes, diff, and replay.
 
 ## Bootstrap, Workspace, Project
 

@@ -2,9 +2,9 @@
 
 This workspace exposes local bootstrap APIs and a seed script for Swagger and
 smoke testing. It also supports project-scoped API tokens for local/staging
-automation, local password-backed sessions, and project invitation tokens, but
-it still does not implement refresh tokens, SSO, invitation email delivery, or
-production identity management.
+automation, local password-backed sessions, refresh-token rotation, project
+invitation tokens, invitation email delivery, and an OIDC SSO baseline. It is
+still not enterprise SAML/SCIM identity management.
 
 ## Start Server
 
@@ -83,6 +83,25 @@ include the editor-state reload hint and latest accepted event metadata. See
 `docs/TASK_092_PLAN.md`, `docs/TASK_093_PLAN.md`,
 `docs/TASK_094_PLAN.md`, and `docs/TASK_095_PLAN.md`.
 
+Team workspace HTTP smoke:
+
+```powershell
+$env:OPENJSON_DB_PATH = "D:\OpenJson\openjson.sqlite3"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+In a second terminal:
+
+```powershell
+python scripts\smoke_team_workspace_flow.py --base-url http://127.0.0.1:8000
+```
+
+This smoke creates unique owner/editor users, invites the teammate into a
+project, creates a JSON document, has the teammate save a versioned edit, checks
+the collaboration checkpoint, adds and reopens a path-level note, verifies notes
+do not mutate the document version or snapshot, and checks diff plus replay
+consistency. See `docs/TASK_111_PLAN.md`.
+
 Local non-realtime editor shell:
 
 ```powershell
@@ -124,7 +143,8 @@ auto-accept.
 It is still not full offline-first replicated storage or general conflict
 auto-resolution. See `docs/TASK_104_PLAN.md`, `docs/TASK_107_PLAN.md`, and
 `docs/TASK_108_PLAN.md`. See `docs/TASK_109_PLAN.md` for invite-link
-onboarding.
+onboarding. See `docs/TASK_110_PLAN.md` for the Notes panel over existing
+comment-thread APIs.
 
 Local session and invitation smoke:
 
