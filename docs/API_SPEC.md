@@ -197,6 +197,8 @@ See `docs/TASK_148_PLAN.md` for explicit browser presence leave on document
 switch and page unload.
 See `docs/TASK_149_PLAN.md` for HTTP presence heartbeat and leave broadcasts
 over the document WebSocket channel.
+See `docs/TASK_150_PLAN.md` for guarding stale WebSocket disconnect leave
+against newer presence heartbeats.
 
 ## Deployment Version
 
@@ -532,7 +534,10 @@ insert/delete/replace operations; they become durable only when
 writes a normal append-only document update event. `text_session.join` requires
 document read permission; `text_session.op` and `text_session.commit` require
 document write permission so viewers cannot mutate shared transient editor
-state. `OPENJSON_REDIS_URL` enables optional Redis fanout across app processes.
+state. On disconnect, a WebSocket clears only the presence row whose
+`last_seen_at` still matches the last presence heartbeat written by that
+connection; newer HTTP or WebSocket heartbeats for the same actor/document are
+preserved. `OPENJSON_REDIS_URL` enables optional Redis fanout across app processes.
 It does not make raw text canonical storage and does not persist syntax-invalid
 JSON. `OPENJSON_WS_RATE_LIMIT_*` can enable a per-connection fixed-window
 WebSocket message limit. Limited connections receive a structured

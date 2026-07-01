@@ -267,6 +267,34 @@ class RealtimeCollaborationTests(unittest.TestCase):
         active = {user["actor_id"]: user for user in message["state"]["active_users"]}
         self.assertNotIn(self.editor_id, active)
 
+    def test_websocket_disconnect_without_socket_presence_keeps_http_presence(self) -> None:
+        response = self.client.post(
+            f"/documents/{self.document['id']}/presence",
+            headers={"X-Actor-Id": self.editor_id},
+            json={
+                "status": "editing",
+                "base_version": 1,
+                "dirty": True,
+                "cursor_path": "/learning_rate",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        with self.client.websocket_connect(self._ws_path(self.editor_id)) as websocket:
+            initial = websocket.receive_json()
+            active = {user["actor_id"]: user for user in initial["state"]["active_users"]}
+            self.assertIn(self.editor_id, active)
+
+        state = self.client.get(
+            f"/documents/{self.document['id']}/collaboration-state",
+            headers={"X-Actor-Id": self.viewer_id},
+        )
+
+        self.assertEqual(state.status_code, 200)
+        active_after_disconnect = {user["actor_id"]: user for user in state.json()["active_users"]}
+        self.assertIn(self.editor_id, active_after_disconnect)
+        self.assertEqual(active_after_disconnect[self.editor_id]["cursor_path"], "/learning_rate")
+
     def test_hub_broadcast_sends_to_all_registered_sockets(self) -> None:
         async def scenario() -> tuple[FakeWebSocket, FakeWebSocket]:
             hub = CollaborationHub()

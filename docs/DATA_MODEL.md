@@ -492,6 +492,13 @@ active document WebSocket clients. These payloads are operational notifications
 only and do not mutate canonical JSON snapshots or append-only
 `document_events`.
 
+TASK_150 stale WebSocket presence leave guard also adds no table. A document
+WebSocket connection remembers the `editor_presence.last_seen_at` value it last
+wrote and only deletes the presence row on disconnect when that value still
+matches. Newer HTTP or WebSocket heartbeats for the same `(document_id,
+actor_id)` row are preserved, so reconnect races do not incorrectly remove an
+active user from collaboration monitoring.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

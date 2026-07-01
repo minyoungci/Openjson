@@ -137,6 +137,7 @@ def leave_editor_presence(
     *,
     document_id: str,
     actor_id: str | None,
+    expected_last_seen_at: str | None = None,
 ) -> dict[str, Any]:
     with connect(db_path) as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -147,13 +148,13 @@ def leave_editor_presence(
             project_id=row["project_id"],
             permission=ProjectPermission.DOCUMENT_READ,
         )
-        conn.execute(
-            """
-            DELETE FROM editor_presence
-            WHERE document_id = ? AND actor_id = ?
-            """,
-            (document_id, actor_id),
-        )
+        params: tuple[Any, ...]
+        where = "document_id = ? AND actor_id = ?"
+        params = (document_id, actor_id)
+        if expected_last_seen_at is not None:
+            where += " AND last_seen_at = ?"
+            params = (document_id, actor_id, expected_last_seen_at)
+        conn.execute(f"DELETE FROM editor_presence WHERE {where}", params)
         return get_collaboration_state_in_connection(
             conn,
             row=row,

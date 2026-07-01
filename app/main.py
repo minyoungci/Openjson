@@ -257,6 +257,16 @@ async def _broadcast_document_mutation_checkpoint(
     await collaboration_hub.broadcast_state(document_id, state, reason=reason)
 
 
+def _actor_presence_last_seen(state: dict, actor_id: str | None) -> str | None:
+    if actor_id is None:
+        return None
+    for active_user in state.get("active_users", []):
+        if active_user.get("actor_id") == actor_id:
+            value = active_user.get("last_seen_at")
+            return value if isinstance(value, str) else None
+    return None
+
+
 async def _broadcast_project_documents_changed(
     *,
     project_id: str,
@@ -1104,6 +1114,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             return
 
         connected = False
+        connection_presence_last_seen_at: str | None = None
         try:
             state = get_collaboration_state(
                 application.state.db_path,
@@ -1177,6 +1188,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                             dirty=bool(message.get("dirty", False)),
                             cursor_path=message.get("cursor_path"),
                         )
+                        connection_presence_last_seen_at = _actor_presence_last_seen(state, actor_id)
                         await collaboration_hub.broadcast_state(
                             document_id,
                             state,
@@ -1269,13 +1281,19 @@ def create_app(db_path: str | None = None) -> FastAPI:
         finally:
             if connected:
                 await collaboration_hub.disconnect(document_id, websocket)
+                if connection_presence_last_seen_at is None:
+                    return
                 try:
                     state = leave_editor_presence(
                         application.state.db_path,
                         document_id=document_id,
                         actor_id=actor_id,
+                        expected_last_seen_at=connection_presence_last_seen_at,
                     )
                 except AppError:
+                    return
+                current_last_seen_at = _actor_presence_last_seen(state, actor_id)
+                if current_last_seen_at is not None and current_last_seen_at != connection_presence_last_seen_at:
                     return
                 await collaboration_hub.broadcast_state(
                     document_id,

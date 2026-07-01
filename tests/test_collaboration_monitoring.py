@@ -161,6 +161,38 @@ class CollaborationMonitoringTests(unittest.TestCase):
 
         self.assertEqual(state["active_users"], [])
 
+    def test_guarded_leave_preserves_newer_presence_heartbeat(self) -> None:
+        initial = upsert_editor_presence(
+            self.db_path,
+            document_id=self.document["id"],
+            actor_id=self.owner_id,
+            status="editing",
+            base_version=1,
+            dirty=True,
+        )
+        initial_seen_at = initial["active_users"][0]["last_seen_at"]
+        newer_seen_at = "9999-01-01T00:00:00Z"
+        with connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE editor_presence
+                SET last_seen_at = ?
+                WHERE document_id = ? AND actor_id = ?
+                """,
+                (newer_seen_at, self.document["id"], self.owner_id),
+            )
+
+        guarded = leave_editor_presence(
+            self.db_path,
+            document_id=self.document["id"],
+            actor_id=self.owner_id,
+            expected_last_seen_at=initial_seen_at,
+        )
+
+        active = {user["actor_id"]: user for user in guarded["active_users"]}
+        self.assertIn(self.owner_id, active)
+        self.assertEqual(active[self.owner_id]["last_seen_at"], newer_seen_at)
+
     def test_stale_presence_rows_are_omitted(self) -> None:
         upsert_editor_presence(
             self.db_path,
