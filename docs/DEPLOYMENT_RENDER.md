@@ -191,6 +191,13 @@ python scripts\smoke_deployment_status.py `
   --expect-actor-header-allowed false
 ```
 
+The smoke prints structured JSON even when it fails. If the diagnostics include
+`VERSION_ENDPOINT_NOT_FOUND`, the public URL is not serving a build that
+contains `GET /version`; run a manual Render deploy from the latest `main`
+commit and verify the Cloudflare CNAME still points at the Render service.
+If diagnostics include `READINESS_MIGRATION_STATUS_MISSING`, `/ready` is also
+coming from an older build that predates the migration readiness gate.
+
 Then create an account from the UI and run a small document flow:
 
 1. Create workspace/project.

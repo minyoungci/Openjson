@@ -35,6 +35,203 @@ def _require(condition: bool, message: str) -> None:
         raise DeploymentSmokeFailure(message)
 
 
+def _json_or_text(response: Any) -> dict[str, Any]:
+    content_type = response.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            parsed = response.json()
+        except Exception as exc:  # pragma: no cover - defensive for real HTTP failures
+            return {
+                "content_type": content_type,
+                "json_error": str(exc),
+                "text": response.text[:500],
+            }
+        return {
+            "content_type": content_type,
+            "json": parsed,
+        }
+    return {
+        "content_type": content_type,
+        "text": response.text[:500],
+    }
+
+
+def _probe_get(client: Any, path: str) -> dict[str, Any]:
+    try:
+        response = client.get(path)
+    except Exception as exc:  # pragma: no cover - depends on external network failures
+        return {
+            "status": "failed",
+            "path": path,
+            "error": str(exc),
+        }
+    result = {
+        "status": "ok" if response.status_code == 200 else "failed",
+        "path": path,
+        "http_status": response.status_code,
+        "body": _json_or_text(response),
+    }
+    if response.status_code != 200:
+        result["error"] = f"GET {path} returned HTTP {response.status_code}."
+    return result
+
+
+def _probe_body_json(probe: dict[str, Any]) -> Any:
+    body = probe.get("body")
+    if not isinstance(body, dict):
+        return None
+    return body.get("json")
+
+
+def _add_failure(diagnostics: list[dict[str, Any]], *, code: str, message: str, details: dict[str, Any]) -> None:
+    diagnostics.append(
+        {
+            "code": code,
+            "message": message,
+            "details": details,
+        }
+    )
+
+
+def run_deployment_status_report(
+    client: Any,
+    *,
+    expect_commit: str | None = None,
+    expect_actor_header_allowed: bool | None = None,
+) -> dict[str, Any]:
+    checks = {
+        "health": _probe_get(client, "/health"),
+        "ready": _probe_get(client, "/ready"),
+        "version": _probe_get(client, "/version"),
+        "app": _probe_get(client, "/app"),
+    }
+    diagnostics: list[dict[str, Any]] = []
+
+    health = _probe_body_json(checks["health"])
+    if checks["health"]["status"] != "ok":
+        _add_failure(
+            diagnostics,
+            code="HEALTH_ENDPOINT_FAILED",
+            message="The deployment did not return HTTP 200 from /health.",
+            details=checks["health"],
+        )
+    elif not isinstance(health, dict) or health.get("status") != "ok" or health.get("service") != "openjson-api":
+        _add_failure(
+            diagnostics,
+            code="HEALTH_PAYLOAD_UNEXPECTED",
+            message="The /health payload does not look like the OpenJson API.",
+            details={"payload": health},
+        )
+
+    ready = _probe_body_json(checks["ready"])
+    if checks["ready"]["status"] != "ok":
+        _add_failure(
+            diagnostics,
+            code="READINESS_ENDPOINT_FAILED",
+            message="The deployment did not return HTTP 200 from /ready.",
+            details=checks["ready"],
+        )
+    elif not isinstance(ready, dict) or ready.get("status") != "ready":
+        _add_failure(
+            diagnostics,
+            code="READINESS_PAYLOAD_UNEXPECTED",
+            message="The /ready payload is not ready or does not look like the OpenJson readiness surface.",
+            details={"payload": ready},
+        )
+    elif not isinstance(ready.get("database", {}).get("migrations"), dict):
+        _add_failure(
+            diagnostics,
+            code="READINESS_MIGRATION_STATUS_MISSING",
+            message=(
+                "The /ready payload is missing migration status. The deployment is likely "
+                "serving an older build; trigger a manual Render deploy from the latest main commit."
+            ),
+            details={"payload": ready},
+        )
+    elif ready.get("database", {}).get("migrations", {}).get("status") != "ok":
+        _add_failure(
+            diagnostics,
+            code="READINESS_MIGRATION_STATUS_NOT_OK",
+            message="The /ready migration status is not ok.",
+            details={"payload": ready},
+        )
+
+    version = _probe_body_json(checks["version"])
+    if checks["version"].get("http_status") == 404:
+        _add_failure(
+            diagnostics,
+            code="VERSION_ENDPOINT_NOT_FOUND",
+            message=(
+                "The deployment is not serving a build that includes GET /version. "
+                "Trigger a manual Render deploy from the latest main commit and verify "
+                "Cloudflare points at the Render service."
+            ),
+            details=checks["version"],
+        )
+    elif checks["version"]["status"] != "ok":
+        _add_failure(
+            diagnostics,
+            code="VERSION_ENDPOINT_FAILED",
+            message="The deployment did not return HTTP 200 from /version.",
+            details=checks["version"],
+        )
+    elif (
+        not isinstance(version, dict)
+        or version.get("service") != "openjson-api"
+        or not isinstance(version.get("source"), dict)
+        or not isinstance(version.get("runtime_config"), dict)
+    ):
+        _add_failure(
+            diagnostics,
+            code="VERSION_PAYLOAD_UNEXPECTED",
+            message="The /version payload is missing required OpenJson deployment metadata.",
+            details={"payload": version},
+        )
+    else:
+        if expect_commit:
+            actual_commit = version["source"].get("git_commit")
+            if actual_commit != expect_commit and not (actual_commit or "").startswith(expect_commit):
+                _add_failure(
+                    diagnostics,
+                    code="DEPLOYED_COMMIT_MISMATCH",
+                    message="The deployed commit does not match the expected Git commit.",
+                    details={"expected": expect_commit, "actual": actual_commit},
+                )
+        if expect_actor_header_allowed is not None:
+            actual_allowed = version["runtime_config"].get("actor_header_allowed")
+            if actual_allowed is not expect_actor_header_allowed:
+                _add_failure(
+                    diagnostics,
+                    code="ACTOR_HEADER_CONFIG_MISMATCH",
+                    message="The deployed actor-header fallback setting does not match the expected value.",
+                    details={"expected": expect_actor_header_allowed, "actual": actual_allowed},
+                )
+
+    app_body = checks["app"].get("body")
+    app_text = app_body.get("text", "") if isinstance(app_body, dict) else ""
+    app_content_type = app_body.get("content_type", "") if isinstance(app_body, dict) else ""
+    if checks["app"]["status"] != "ok":
+        _add_failure(
+            diagnostics,
+            code="APP_ENDPOINT_FAILED",
+            message="The deployment did not return HTTP 200 from /app.",
+            details=checks["app"],
+        )
+    elif "text/html" not in app_content_type or "OpenJson" not in app_text:
+        _add_failure(
+            diagnostics,
+            code="APP_PAYLOAD_UNEXPECTED",
+            message="The /app route did not return the expected OpenJson HTML shell.",
+            details={"content_type": app_content_type, "contains_openjson": "OpenJson" in app_text},
+        )
+
+    return {
+        "status": "ok" if not diagnostics else "failed",
+        "checks": checks,
+        "diagnostics": diagnostics,
+    }
+
+
 def run_deployment_status_smoke(
     client: Any,
     *,
@@ -104,12 +301,14 @@ def main() -> None:
         expected_actor_header_allowed = args.expect_actor_header_allowed == "true"
 
     with httpx.Client(base_url=args.base_url.rstrip("/"), timeout=20.0, follow_redirects=True) as client:
-        result = run_deployment_status_smoke(
+        result = run_deployment_status_report(
             client,
             expect_commit=args.expect_commit,
             expect_actor_header_allowed=expected_actor_header_allowed,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
+    if result["status"] != "ok":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

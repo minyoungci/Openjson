@@ -150,7 +150,12 @@ This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
 and does not create users, projects, documents, or events. See
 `docs/TASK_114_PLAN.md`, `docs/TASK_115_PLAN.md`, and
 `docs/TASK_116_PLAN.md`. See `docs/TASK_117_PLAN.md` for WebSocket message
-rate limiting.
+rate limiting and `docs/TASK_121_PLAN.md` for structured failure diagnostics.
+If the official URL returns `VERSION_ENDPOINT_NOT_FOUND`, the custom domain is
+not yet serving a build that includes `/version`; trigger a manual Render deploy
+from the latest `main` commit and rerun the smoke.
+If it returns `READINESS_MIGRATION_STATUS_MISSING`, the public `/ready` route is
+also from an older build and should be resolved by the same manual deploy.
 
 Local non-realtime editor shell:
 

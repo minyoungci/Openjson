@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.database import KNOWN_SCHEMA_MIGRATIONS, SCHEMA_SQL, connect, init_db, utc_now
@@ -18,7 +19,7 @@ from app.main import create_app
 from app.project_usage_service import ProjectUsageLimitConfig
 from app.rate_limit import RateLimitConfig
 from app.request_body_limit import RequestBodyLimitConfig
-from scripts.smoke_deployment_status import run_deployment_status_smoke
+from scripts.smoke_deployment_status import run_deployment_status_report, run_deployment_status_smoke
 
 
 class DeploymentHardeningTests(unittest.TestCase):
@@ -402,6 +403,85 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
         self.assertTrue(result["app"]["contains_openjson"])
         self.assertEqual(self._counts(), before)
+
+    def test_deployment_status_report_returns_structured_404_diagnostic(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/health":
+                return httpx.Response(200, json={"status": "ok", "service": "openjson-api"})
+            if request.url.path == "/ready":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ready",
+                        "database": {
+                            "migrations": {
+                                "status": "ok",
+                            },
+                        },
+                    },
+                )
+            if request.url.path == "/app":
+                return httpx.Response(200, headers={"content-type": "text/html"}, text="<title>OpenJson</title>")
+            return httpx.Response(404, json={"detail": "Not Found"})
+
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport, base_url="https://openjson.example") as client:
+            result = run_deployment_status_report(client)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["checks"]["version"]["http_status"], 404)
+        self.assertEqual(
+            [diagnostic["code"] for diagnostic in result["diagnostics"]],
+            ["VERSION_ENDPOINT_NOT_FOUND"],
+        )
+        self.assertIn(
+            "manual Render deploy",
+            result["diagnostics"][0]["message"],
+        )
+
+    def test_deployment_status_report_detects_stale_ready_payload(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/health":
+                return httpx.Response(200, json={"status": "ok", "service": "openjson-api"})
+            if request.url.path == "/ready":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ready",
+                        "database": {
+                            "connected": True,
+                            "foreign_keys_enabled": True,
+                        },
+                    },
+                )
+            if request.url.path == "/version":
+                return httpx.Response(
+                    200,
+                    json={
+                        "service": "openjson-api",
+                        "source": {
+                            "git_commit": "abc123",
+                        },
+                        "runtime_config": {
+                            "actor_header_allowed": False,
+                        },
+                    },
+                )
+            return httpx.Response(200, headers={"content-type": "text/html"}, text="<title>OpenJson</title>")
+
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport, base_url="https://openjson.example") as client:
+            result = run_deployment_status_report(client)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(
+            [diagnostic["code"] for diagnostic in result["diagnostics"]],
+            ["READINESS_MIGRATION_STATUS_MISSING"],
+        )
+        self.assertIn(
+            "older build",
+            result["diagnostics"][0]["message"],
+        )
 
 
 if __name__ == "__main__":
