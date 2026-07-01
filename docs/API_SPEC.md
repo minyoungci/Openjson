@@ -221,6 +221,9 @@ responses after project navigation, creation, or session changes.
 See `docs/TASK_160_PLAN.md` for guarding stale browser comment-thread list
 responses and in-flight comment actions after overlapping loads or document
 switches.
+See `docs/TASK_161_PLAN.md` for guarding stale browser validation, preview,
+conflict-preview, history, and diff panel responses after overlapping requests,
+document switches, version changes, or editor buffer changes.
 
 ## Deployment Version
 
@@ -679,6 +682,11 @@ only when the response still belongs to the latest project-home request. Opening
 a project, starting project creation, or clearing session state invalidates
 outstanding project-home loads, and stale failures are ignored instead of
 rendering into the current screen.
+Document auxiliary panel responses in the static browser are applied only when
+they still match the latest request for the selected document and the captured
+version or editor-buffer inputs. This applies to validation, content preview,
+conflict preview, history, and diff panels; stale successes and stale failures
+are ignored.
 
 Offline sync accepts a batch of queued client content-save operations:
 

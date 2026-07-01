@@ -578,6 +578,16 @@ and does not affect `comment_threads`, append-only `comments`, canonical
 snapshots, append-only `document_events`, schemas, reviews, or WebSocket server
 state.
 
+TASK_161 stale document panel response guarding also adds no table. The static
+browser client tracks validation, content preview, conflict preview, history,
+and diff panel requests in memory and applies results only while they still
+match the latest request, selected document id, and captured version or editor
+buffer inputs. Clearing the selected editor, receiving a live selected-document
+delete payload, or clearing session state invalidates outstanding document panel
+requests. This is client-only state and does not persist validation results or
+affect canonical snapshots, append-only `document_events`, schemas, comments,
+reviews, or WebSocket server state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

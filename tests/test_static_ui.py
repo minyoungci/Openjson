@@ -210,6 +210,61 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("Syncing latest live text before commit.", js.text)
         self.assertIn("flushOfflineQueue", js.text)
         self.assertIn("Autosaved from OpenJson UI", js.text)
+        validation_loader = js.text.split("async function validateSelected()", 1)[1].split(
+            "async function previewSelected", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", validation_loader)
+        self.assertIn("const currentVersion = state.currentVersion", validation_loader)
+        self.assertIn("const requestId = state.validationRequestId + 1", validation_loader)
+        self.assertIn("state.validationRequestId = requestId", validation_loader)
+        self.assertIn("if (!isCurrentValidationRequest(requestId, documentId, currentVersion))", validation_loader)
+        preview_loader = js.text.split("async function previewSelected()", 1)[1].split(
+            "async function saveSelected", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", preview_loader)
+        self.assertIn("const baseVersion = state.baseVersion", preview_loader)
+        self.assertIn("const contentText = els.editorBuffer.value", preview_loader)
+        self.assertIn("const requestId = state.previewRequestId + 1", preview_loader)
+        self.assertIn("state.previewRequestId = requestId", preview_loader)
+        self.assertIn("if (!isCurrentPreviewRequest(requestId, documentId, baseVersion, contentText))", preview_loader)
+        conflict_preview_loader = js.text.split("async function loadConflictPreview", 1)[1].split(
+            "async function keepLocalBufferOnLatest", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", conflict_preview_loader)
+        self.assertIn("const contentText = els.editorBuffer.value", conflict_preview_loader)
+        self.assertIn("const requestId = state.conflictPreviewRequestId + 1", conflict_preview_loader)
+        self.assertIn("state.conflictPreviewRequestId = requestId", conflict_preview_loader)
+        self.assertIn(
+            "if (!isCurrentConflictPreviewRequest(requestId, documentId, baseVersion, contentText))",
+            conflict_preview_loader,
+        )
+        history_loader = js.text.split("async function loadHistory()", 1)[1].split(
+            "async function loadDiff", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", history_loader)
+        self.assertIn("const currentVersion = state.currentVersion", history_loader)
+        self.assertIn("const requestId = state.historyRequestId + 1", history_loader)
+        self.assertIn("state.historyRequestId = requestId", history_loader)
+        self.assertIn("if (!isCurrentHistoryRequest(requestId, documentId, currentVersion))", history_loader)
+        diff_loader = js.text.split("async function loadDiff()", 1)[1].split(
+            "async function rollbackSelected", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", diff_loader)
+        self.assertIn("const currentVersion = state.currentVersion", diff_loader)
+        self.assertIn("const requestId = state.diffRequestId + 1", diff_loader)
+        self.assertIn("state.diffRequestId = requestId", diff_loader)
+        self.assertIn("if (!isCurrentDiffRequest(requestId, documentId, currentVersion, fromVersion, toVersion))", diff_loader)
+        self.assertIn("function isCurrentValidationRequest(requestId, documentId, currentVersion)", js.text)
+        self.assertIn("function isCurrentPreviewRequest(requestId, documentId, baseVersion, contentText)", js.text)
+        self.assertIn("function isCurrentConflictPreviewRequest(requestId, documentId, baseVersion, contentText)", js.text)
+        self.assertIn("function isCurrentHistoryRequest(requestId, documentId, currentVersion)", js.text)
+        self.assertIn("function isCurrentDiffRequest(requestId, documentId, currentVersion, fromVersion, toVersion)", js.text)
+        self.assertIn("function invalidateDocumentPanelRequests()", js.text)
+        self.assertIn("state.validationRequestId += 1", js.text)
+        self.assertIn("state.previewRequestId += 1", js.text)
+        self.assertIn("state.conflictPreviewRequestId += 1", js.text)
+        self.assertIn("state.historyRequestId += 1", js.text)
+        self.assertIn("state.diffRequestId += 1", js.text)
         self.assertIn("loadCommentThreads", js.text)
         self.assertIn("comment_threads.updated", js.text)
         self.assertIn("applyCommentThreadsUpdated", js.text)
@@ -274,6 +329,7 @@ class StaticUiTests(unittest.TestCase):
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", session_clearer)
         self.assertIn("invalidateTeamMembersRequests()", session_clearer)
+        self.assertIn("invalidateDocumentPanelRequests()", session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1
         )[0]

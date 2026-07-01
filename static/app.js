@@ -118,6 +118,11 @@
     projectHomeRequestId: 0,
     selectedDocumentId: initialParams.get("document_id") || localStorage.getItem("openjson.selectedDocumentId") || "",
     selectedEditorState: null,
+    validationRequestId: 0,
+    previewRequestId: 0,
+    conflictPreviewRequestId: 0,
+    historyRequestId: 0,
+    diffRequestId: 0,
     bootstrap: null,
     bootstrapRequestId: 0,
     projectSchemas: [],
@@ -786,6 +791,7 @@
     invalidateBootstrapRequests();
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
+    invalidateDocumentPanelRequests();
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
@@ -1279,6 +1285,7 @@
     state.selectedEditorState = null;
     state.selectedDocumentId = "";
     invalidateCommentThreadsRequests();
+    invalidateDocumentPanelRequests();
     state.originalText = "";
     state.liveTextShadow = "";
     state.liveTextRevision = 0;
@@ -1420,27 +1427,58 @@
   }
 
   async function validateSelected() {
-    if (!state.selectedDocumentId) {
+    const documentId = state.selectedDocumentId;
+    const currentVersion = state.currentVersion;
+    if (!documentId) {
       return;
     }
-    const result = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/validate`, {
-      method: "POST",
-    });
+    const requestId = state.validationRequestId + 1;
+    state.validationRequestId = requestId;
+    let result;
+    try {
+      result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/validate`, {
+        method: "POST",
+      });
+    } catch (error) {
+      if (!isCurrentValidationRequest(requestId, documentId, currentVersion)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentValidationRequest(requestId, documentId, currentVersion)) {
+      return;
+    }
     renderValidation({ available: true, valid: result.valid, errors: result.errors, warnings: result.warnings, context: result });
     setEditorStatus("Validation refreshed.", result.valid ? "ok" : "error");
   }
 
   async function previewSelected() {
-    if (!state.selectedDocumentId || !state.syntaxValid) {
+    const documentId = state.selectedDocumentId;
+    const baseVersion = state.baseVersion;
+    const contentText = els.editorBuffer.value;
+    if (!documentId || !state.syntaxValid) {
       return;
     }
-    const result = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/content-preview`, {
-      method: "POST",
-      body: {
-        base_version: state.baseVersion,
-        content_text: els.editorBuffer.value,
-      },
-    });
+    const requestId = state.previewRequestId + 1;
+    state.previewRequestId = requestId;
+    let result;
+    try {
+      result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/content-preview`, {
+        method: "POST",
+        body: {
+          base_version: baseVersion,
+          content_text: contentText,
+        },
+      });
+    } catch (error) {
+      if (!isCurrentPreviewRequest(requestId, documentId, baseVersion, contentText)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentPreviewRequest(requestId, documentId, baseVersion, contentText)) {
+      return;
+    }
     renderPreview(result);
     setEditorStatus(`Preview ready: ${result.changed_paths.length} changed path(s).`, "ok");
   }
@@ -1486,19 +1524,34 @@
   }
 
   async function loadConflictPreview(error) {
-    if (!state.selectedDocumentId || !state.syntaxValid) {
+    const documentId = state.selectedDocumentId;
+    const contentText = els.editorBuffer.value;
+    if (!documentId || !state.syntaxValid) {
       renderError(els.conflictPanel, error);
       return;
     }
-    state.conflictLocalText = els.editorBuffer.value;
     const baseVersion = error.details.client_base_version || state.baseVersion;
-    const result = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/content-conflict-preview`, {
-      method: "POST",
-      body: {
-        base_version: baseVersion,
-        content_text: els.editorBuffer.value,
-      },
-    });
+    state.conflictLocalText = contentText;
+    const requestId = state.conflictPreviewRequestId + 1;
+    state.conflictPreviewRequestId = requestId;
+    let result;
+    try {
+      result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/content-conflict-preview`, {
+        method: "POST",
+        body: {
+          base_version: baseVersion,
+          content_text: contentText,
+        },
+      });
+    } catch (inner) {
+      if (!isCurrentConflictPreviewRequest(requestId, documentId, baseVersion, contentText)) {
+        return;
+      }
+      throw inner;
+    }
+    if (!isCurrentConflictPreviewRequest(requestId, documentId, baseVersion, contentText)) {
+      return;
+    }
     renderConflict(result);
     setEditorStatus("Version conflict. Reload before saving.", "error");
   }
@@ -1517,23 +1570,105 @@
   }
 
   async function loadHistory() {
-    if (!state.selectedDocumentId) {
+    const documentId = state.selectedDocumentId;
+    const currentVersion = state.currentVersion;
+    if (!documentId) {
       return;
     }
-    const history = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/history`);
+    const requestId = state.historyRequestId + 1;
+    state.historyRequestId = requestId;
+    let history;
+    try {
+      history = await apiFetch(`/documents/${encodeURIComponent(documentId)}/history`);
+    } catch (error) {
+      if (!isCurrentHistoryRequest(requestId, documentId, currentVersion)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentHistoryRequest(requestId, documentId, currentVersion)) {
+      return;
+    }
     renderHistory(history.events || []);
   }
 
   async function loadDiff() {
-    if (!state.selectedDocumentId) {
+    const documentId = state.selectedDocumentId;
+    const currentVersion = state.currentVersion;
+    if (!documentId) {
       return;
     }
     const fromVersion = Number(els.diffFrom.value);
     const toVersion = Number(els.diffTo.value);
-    const diff = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/diff`, {
-      query: { from_version: fromVersion, to_version: toVersion },
-    });
+    const requestId = state.diffRequestId + 1;
+    state.diffRequestId = requestId;
+    let diff;
+    try {
+      diff = await apiFetch(`/documents/${encodeURIComponent(documentId)}/diff`, {
+        query: { from_version: fromVersion, to_version: toVersion },
+      });
+    } catch (error) {
+      if (!isCurrentDiffRequest(requestId, documentId, currentVersion, fromVersion, toVersion)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentDiffRequest(requestId, documentId, currentVersion, fromVersion, toVersion)) {
+      return;
+    }
     renderDiff(diff);
+  }
+
+  function isCurrentValidationRequest(requestId, documentId, currentVersion) {
+    return (
+      state.validationRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.currentVersion === currentVersion
+    );
+  }
+
+  function isCurrentPreviewRequest(requestId, documentId, baseVersion, contentText) {
+    return (
+      state.previewRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.baseVersion === baseVersion &&
+      els.editorBuffer.value === contentText
+    );
+  }
+
+  function isCurrentConflictPreviewRequest(requestId, documentId, baseVersion, contentText) {
+    return (
+      state.conflictPreviewRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.baseVersion === baseVersion &&
+      els.editorBuffer.value === contentText
+    );
+  }
+
+  function isCurrentHistoryRequest(requestId, documentId, currentVersion) {
+    return (
+      state.historyRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.currentVersion === currentVersion
+    );
+  }
+
+  function isCurrentDiffRequest(requestId, documentId, currentVersion, fromVersion, toVersion) {
+    return (
+      state.diffRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.currentVersion === currentVersion &&
+      Number(els.diffFrom.value) === fromVersion &&
+      Number(els.diffTo.value) === toVersion
+    );
+  }
+
+  function invalidateDocumentPanelRequests() {
+    state.validationRequestId += 1;
+    state.previewRequestId += 1;
+    state.conflictPreviewRequestId += 1;
+    state.historyRequestId += 1;
+    state.diffRequestId += 1;
   }
 
   async function rollbackSelected() {
@@ -1613,6 +1748,7 @@
         state.selectedEditorState = null;
         state.selectedDocumentId = "";
         invalidateCommentThreadsRequests();
+        invalidateDocumentPanelRequests();
         state.liveTextShadow = "";
         state.liveTextRevision = 0;
         state.liveTextPendingOperation = false;
