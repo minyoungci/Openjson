@@ -212,6 +212,8 @@ See `docs/TASK_155_PLAN.md` for guarding stale browser project bootstrap
 responses after project switches, logout, or refresh races.
 See `docs/TASK_156_PLAN.md` for invalidating stale browser bootstrap loads
 when returning to the project selection screen.
+See `docs/TASK_157_PLAN.md` for guarding stale browser create-document schema
+match preview responses after project, path, or mode changes.
 
 ## Deployment Version
 
@@ -653,6 +655,10 @@ project/document UI after navigation or logout.
 Returning to the project selection screen invalidates outstanding browser
 editor-bootstrap requests before workspace/project lists are loaded, so late
 bootstrap responses cannot re-open the editor after intentional navigation.
+Create-document schema match previews in the static browser are applied only
+when the response still belongs to the latest preview request for the same
+project id, candidate `full_path`, visible create panel, and automatic schema
+mode.
 
 Offline sync accepts a batch of queued client content-save operations:
 

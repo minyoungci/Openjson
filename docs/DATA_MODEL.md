@@ -540,6 +540,14 @@ re-open an old editor view. This is client-only state and does not affect
 canonical snapshots, append-only `document_events`, workspaces, projects,
 schemas, comments, reviews, or WebSocket server state.
 
+TASK_157 stale schema match preview guarding also adds no table. The static
+browser client tracks create-time schema match preview requests in memory and
+applies a response only while it still matches the latest request, active
+project id, candidate `full_path`, visible create panel, and automatic schema
+mode. This is client-only preview state and does not affect schema rows,
+document creation, canonical snapshots, append-only `document_events`, or
+WebSocket server state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -136,6 +136,17 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("keepLocalBufferOnLatest", js.text)
         self.assertIn("previewCreateSchemaMatch", js.text)
         self.assertIn("renderSchema", js.text)
+        schema_match_preview = js.text.split("async function previewCreateSchemaMatch()", 1)[1].split(
+            "function renderSchema", 1
+        )[0]
+        self.assertIn("const requestId = state.schemaMatchRequestId + 1", schema_match_preview)
+        self.assertIn("state.schemaMatchRequestId = requestId", schema_match_preview)
+        self.assertIn("const projectId = state.projectId", schema_match_preview)
+        self.assertIn("/projects/${encodeURIComponent(projectId)}/schema-matches", schema_match_preview)
+        self.assertIn("if (!isCurrentSchemaMatchRequest(requestId, projectId, fullPath))", schema_match_preview)
+        self.assertIn("function isCurrentSchemaMatchRequest(requestId, projectId, fullPath)", js.text)
+        self.assertIn("state.schemaMatchRequestId === requestId", js.text)
+        self.assertIn("cleanOptional(els.newPath.value) === fullPath", js.text)
         self.assertIn("SCHEMA_VALIDATION_FAILED", js.text)
         self.assertIn("renderSchemaValidationFailure", js.text)
         self.assertIn("renderZipImportResult", js.text)

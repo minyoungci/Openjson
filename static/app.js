@@ -128,6 +128,7 @@
     commentThreads: [],
     createSchemaMatch: null,
     schemaMatchTimer: null,
+    schemaMatchRequestId: 0,
     zipFile: null,
     zipPreview: null,
     presenceCursorTimer: null,
@@ -2524,9 +2525,12 @@
   }
 
   async function previewCreateSchemaMatch() {
+    const requestId = state.schemaMatchRequestId + 1;
+    state.schemaMatchRequestId = requestId;
     if (els.createPanel.classList.contains("hidden")) {
       return;
     }
+    const projectId = state.projectId;
     const explicitSchemaId = cleanOptional(els.schemaSelect.value);
     if (explicitSchemaId) {
       state.createSchemaMatch = null;
@@ -2541,12 +2545,36 @@
       syncButtons();
       return;
     }
-    const result = await apiFetch(`/projects/${encodeURIComponent(state.projectId)}/schema-matches`, {
-      query: { full_path: fullPath },
-    });
+    if (!projectId) {
+      return;
+    }
+    let result;
+    try {
+      result = await apiFetch(`/projects/${encodeURIComponent(projectId)}/schema-matches`, {
+        query: { full_path: fullPath },
+      });
+    } catch (error) {
+      if (!isCurrentSchemaMatchRequest(requestId, projectId, fullPath)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentSchemaMatchRequest(requestId, projectId, fullPath)) {
+      return;
+    }
     state.createSchemaMatch = result;
     renderSchemaMatch(result);
     syncButtons();
+  }
+
+  function isCurrentSchemaMatchRequest(requestId, projectId, fullPath) {
+    return (
+      state.schemaMatchRequestId === requestId &&
+      state.projectId === projectId &&
+      cleanOptional(els.newPath.value) === fullPath &&
+      !els.createPanel.classList.contains("hidden") &&
+      !cleanOptional(els.schemaSelect.value)
+    );
   }
 
   function renderSchema(schema) {
