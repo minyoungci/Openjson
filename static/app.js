@@ -135,6 +135,10 @@
     collaborationReconnectTimer: null,
     collaborationTransport: "polling",
     collaborationStopped: false,
+    projectSocket: null,
+    projectSocketProjectId: "",
+    projectReconnectTimer: null,
+    projectWorkspaceStopped: false,
     autosaveTimer: null,
     autosaveEnabled: localStorage.getItem("openjson.autosaveEnabled") === "1",
     autoMergeEnabled: localStorage.getItem("openjson.autoMergeEnabled") === "1",
@@ -486,6 +490,7 @@
       return;
     }
     stopCollaborationLoop();
+    stopProjectWorkspaceSocket();
     state.loading = true;
     showProjectScreen();
     clearPanel(els.projectList, "Loading projects...");
@@ -564,6 +569,7 @@
 
   function showAuthScreen(message) {
     stopCollaborationLoop();
+    stopProjectWorkspaceSocket();
     els.authScreen.classList.remove("hidden");
     els.projectScreen.classList.add("hidden");
     els.workspaceShell.classList.add("hidden");
@@ -574,6 +580,7 @@
   }
 
   function showProjectScreen(message) {
+    stopProjectWorkspaceSocket();
     els.authScreen.classList.add("hidden");
     els.projectScreen.classList.remove("hidden");
     els.workspaceShell.classList.add("hidden");
@@ -830,6 +837,7 @@
     } else {
       setSelectedEditorState(data.selected_document_editor_state);
     }
+    ensureProjectWorkspaceSocket();
     restartCollaborationLoop();
     syncButtons();
   }
@@ -1504,6 +1512,18 @@
     }
   }
 
+  async function applyProjectDocumentsChanged(payload) {
+    if (!payload || payload.project_id !== state.projectId) {
+      return;
+    }
+    if (state.dirty) {
+      setEditorStatus("Project documents changed. Save or reload to refresh the tree.", "info");
+      return;
+    }
+    await loadBootstrap(state.selectedDocumentId || null);
+    setEditorStatus("Project documents updated.", "info");
+  }
+
   async function createCommentThread() {
     if (!state.selectedDocumentId) {
       return;
@@ -1759,6 +1779,77 @@
       state.collaborationSocket = null;
       socket.close();
     }
+  }
+
+  function ensureProjectWorkspaceSocket() {
+    if (!state.projectId || !state.token || !("WebSocket" in window)) {
+      return;
+    }
+    if (state.projectSocket && state.projectSocketProjectId === state.projectId) {
+      return;
+    }
+    stopProjectWorkspaceSocket();
+    state.projectWorkspaceStopped = false;
+    openProjectWorkspaceSocket();
+  }
+
+  function stopProjectWorkspaceSocket() {
+    state.projectWorkspaceStopped = true;
+    window.clearTimeout(state.projectReconnectTimer);
+    state.projectReconnectTimer = null;
+    state.projectSocketProjectId = "";
+    if (state.projectSocket) {
+      const socket = state.projectSocket;
+      state.projectSocket = null;
+      socket.close();
+    }
+  }
+
+  function openProjectWorkspaceSocket() {
+    if (!state.projectId || !state.token || !("WebSocket" in window)) {
+      return;
+    }
+    const projectId = state.projectId;
+    const url = new URL(`/ws/projects/${encodeURIComponent(projectId)}/workspace`, window.location.origin);
+    url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    url.searchParams.set("token", state.token);
+    const socket = new WebSocket(url.toString());
+    state.projectSocket = socket;
+    state.projectSocketProjectId = projectId;
+
+    socket.addEventListener("message", (event) => {
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch (error) {
+        return;
+      }
+      if (payload.type === "project.documents.changed") {
+        applyProjectDocumentsChanged(payload).catch((error) => renderError(els.validationPanel, error));
+      } else if (payload.type === "error" && payload.error) {
+        renderErrorObject(els.validationPanel, payload.error);
+      }
+    });
+
+    socket.addEventListener("close", () => {
+      if (state.projectSocket !== socket) {
+        return;
+      }
+      state.projectSocket = null;
+      state.projectSocketProjectId = "";
+      if (state.projectWorkspaceStopped || state.projectId !== projectId) {
+        return;
+      }
+      state.projectReconnectTimer = window.setTimeout(() => {
+        openProjectWorkspaceSocket();
+      }, 2000);
+    });
+
+    socket.addEventListener("error", () => {
+      if (state.projectSocket === socket) {
+        socket.close();
+      }
+    });
   }
 
   function openCollaborationSocket() {

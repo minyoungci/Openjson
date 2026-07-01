@@ -186,6 +186,8 @@ accepted HTTP document mutations.
 See `docs/TASK_142_PLAN.md` for WebSocket comment-thread update notifications.
 See `docs/TASK_143_PLAN.md` for WebSocket document lifecycle update
 notifications.
+See `docs/TASK_144_PLAN.md` for project-scoped document-list update
+notifications.
 
 ## Deployment Version
 
@@ -325,6 +327,9 @@ diagnostics.
 - `POST /projects/{project_id}/imports/zip-apply`
 - `GET /projects/{project_id}/document-events`
 - `GET /projects/{project_id}/document-search?q=learning_rate`
+- `WS /ws/projects/{project_id}/workspace?actor_id=user_dev` when the
+  development actor-id fallback is enabled
+- `WS /ws/projects/{project_id}/workspace?token=ojs_<session token>`
 - `GET /documents/{document_id}`
 - `GET /documents/{document_id}/editor-state`
 - `GET /documents/{document_id}/collaboration-state?since_version=1`
@@ -573,6 +578,15 @@ selected document should refresh project bootstrap state, or preserve an
 unsaved local editor buffer if the selected document was deleted remotely.
 These notifications are operational only; durable lifecycle history remains the
 existing append-only `document_events` `delete` and `restore` rows.
+
+Project workspace WebSocket clients receive `project.documents.changed` after
+successful document create, ZIP import apply, document soft-delete, and document
+restore. The payload contains `project_id`, `actor_id`, `reason`, and a compact
+`documents` list with document id, path, version, event metadata, lifecycle
+marker, and schema id when present. Browser clients should refresh
+`GET /projects/{project_id}/editor-bootstrap` when their current editor buffer
+is clean, and should delay refresh while a local buffer is dirty. These
+notifications are operational only and do not add a project event store.
 
 Offline sync accepts a batch of queued client content-save operations:
 

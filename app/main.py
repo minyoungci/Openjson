@@ -20,6 +20,7 @@ from app.auth_service import (
     create_project_api_token,
     create_project_invitation,
     create_oidc_login_url,
+    enforce_api_token_scope,
     get_current_session_user,
     list_project_api_tokens,
     list_project_invitations,
@@ -77,6 +78,7 @@ from app.integrity_service import (
 )
 from app.observability import REQUEST_ID_HEADER, configure_request_observability
 from app.offline_sync_service import apply_offline_sync_batch
+from app.permissions import ProjectPermission, require_project_permission
 from app.project_usage_service import get_project_usage, project_usage_limit_config_from_env
 from app.rate_limit import (
     FixedWindowRateLimiter,
@@ -177,6 +179,64 @@ def _request_fields_set(request: object) -> set[str]:
     return set(getattr(request, "__fields_set__", set()))
 
 
+def _resolve_websocket_actor(
+    db_path: str,
+    *,
+    token: str | None,
+    actor_id: str | None,
+    allow_actor_header: bool,
+    method: str,
+    path: str,
+) -> str:
+    if token:
+        token_context = authenticate_bearer_token(db_path, token)
+        if token_context["token_type"] == "api_token":
+            enforce_api_token_scope(
+                db_path,
+                token_project_id=token_context["project_id"],
+                method=method,
+                path=path,
+            )
+        if actor_id is not None and actor_id != token_context["actor_id"]:
+            raise AppError(
+                ErrorCode.PERMISSION_DENIED,
+                "actor_id does not match bearer token actor.",
+                {"actor_id": actor_id},
+            )
+        return token_context["actor_id"]
+    if actor_id and not allow_actor_header:
+        raise AppError(
+            ErrorCode.AUTH_REQUIRED,
+            "Bearer token authentication is required.",
+            {"actor_query_allowed": False},
+        )
+    if not actor_id:
+        raise AppError(
+            ErrorCode.AUTH_REQUIRED,
+            "WebSocket collaboration requires actor information.",
+        )
+    return actor_id
+
+
+def _project_workspace_channel(project_id: str) -> str:
+    return f"project:{project_id}:workspace"
+
+
+def _document_change_summary(document: dict) -> dict:
+    summary = {
+        "id": document.get("id"),
+        "full_path": document.get("full_path"),
+        "current_version": document.get("current_version"),
+        "event_id": document.get("event_id"),
+        "event_type": document.get("event_type"),
+    }
+    if "deleted_at" in document:
+        summary["deleted_at"] = document.get("deleted_at")
+    if "schema_id" in document:
+        summary["schema_id"] = document.get("schema_id")
+    return summary
+
+
 async def _broadcast_document_mutation_checkpoint(
     db_path: str,
     *,
@@ -195,6 +255,25 @@ async def _broadcast_document_mutation_checkpoint(
     except AppError:
         return
     await collaboration_hub.broadcast_state(document_id, state, reason=reason)
+
+
+async def _broadcast_project_documents_changed(
+    *,
+    project_id: str,
+    actor_id: str | None,
+    reason: str,
+    documents: list[dict],
+) -> None:
+    await collaboration_hub.broadcast(
+        _project_workspace_channel(project_id),
+        {
+            "type": "project.documents.changed",
+            "project_id": project_id,
+            "actor_id": actor_id,
+            "reason": reason,
+            "documents": documents,
+        },
+    )
 
 
 def _comment_thread_document_id(db_path: str, thread_id: str) -> str | None:
@@ -769,12 +848,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
 
     @application.post("/projects/{project_id}/documents")
-    def create_document_endpoint(
+    async def create_document_endpoint(
         project_id: str,
         request: CreateDocumentRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return create_document(
+        result = create_document(
             application.state.db_path,
             project_id=project_id,
             actor_id=actor_id,
@@ -782,6 +861,13 @@ def create_app(db_path: str | None = None) -> FastAPI:
             content=request.content,
             schema_id=request.schema_id,
         )
+        await _broadcast_project_documents_changed(
+            project_id=project_id,
+            actor_id=actor_id,
+            reason="document.created",
+            documents=[_document_change_summary(result)],
+        )
+        return result
 
     @application.get("/projects/{project_id}/documents")
     def list_project_documents_endpoint(
@@ -824,13 +910,20 @@ def create_app(db_path: str | None = None) -> FastAPI:
         reason: str | None = None,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return apply_zip_import(
+        result = apply_zip_import(
             application.state.db_path,
             project_id=project_id,
             actor_id=actor_id,
             archive_bytes=await request.body(),
             reason=reason,
         )
+        await _broadcast_project_documents_changed(
+            project_id=project_id,
+            actor_id=actor_id,
+            reason="documents.imported",
+            documents=[_document_change_summary(document) for document in result.get("created_documents", [])],
+        )
+        return result
 
     @application.get("/projects/{project_id}/document-tree")
     def get_project_document_tree_endpoint(
@@ -984,44 +1077,17 @@ def create_app(db_path: str | None = None) -> FastAPI:
         token: str | None = Query(default=None),
     ) -> None:
         await websocket.accept()
-        if token:
-            try:
-                token_context = authenticate_bearer_token(application.state.db_path, token)
-                if token_context["token_type"] == "api_token":
-                    from app.auth_service import enforce_api_token_scope
-
-                    enforce_api_token_scope(
-                        application.state.db_path,
-                        token_project_id=token_context["project_id"],
-                        method="GET",
-                        path=f"/documents/{document_id}",
-                    )
-                if actor_id is not None and actor_id != token_context["actor_id"]:
-                    raise AppError(
-                        ErrorCode.PERMISSION_DENIED,
-                        "actor_id does not match bearer token actor.",
-                        {"actor_id": actor_id},
-                    )
-                actor_id = token_context["actor_id"]
-            except AppError as exc:
-                await websocket.send_json(websocket_error_payload(exc))
-                await websocket.close(code=1008)
-                return
-        elif actor_id and not application.state.allow_actor_header:
-            error = AppError(
-                ErrorCode.AUTH_REQUIRED,
-                "Bearer token authentication is required.",
-                {"actor_query_allowed": False},
+        try:
+            actor_id = _resolve_websocket_actor(
+                application.state.db_path,
+                token=token,
+                actor_id=actor_id,
+                allow_actor_header=application.state.allow_actor_header,
+                method="GET",
+                path=f"/documents/{document_id}",
             )
-            await websocket.send_json(websocket_error_payload(error))
-            await websocket.close(code=1008)
-            return
-        if not actor_id:
-            error = AppError(
-                ErrorCode.AUTH_REQUIRED,
-                "WebSocket collaboration requires actor information.",
-            )
-            await websocket.send_json(websocket_error_payload(error))
+        except AppError as exc:
+            await websocket.send_json(websocket_error_payload(exc))
             await websocket.close(code=1008)
             return
 
@@ -1205,6 +1271,126 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     reason="leave",
                 )
 
+    @application.websocket("/ws/projects/{project_id}/workspace")
+    async def project_workspace_websocket(
+        websocket: WebSocket,
+        project_id: str,
+        actor_id: str | None = Query(default=None),
+        token: str | None = Query(default=None),
+    ) -> None:
+        await websocket.accept()
+        try:
+            actor_id = _resolve_websocket_actor(
+                application.state.db_path,
+                token=token,
+                actor_id=actor_id,
+                allow_actor_header=application.state.allow_actor_header,
+                method="GET",
+                path=f"/projects/{project_id}",
+            )
+            with connect(application.state.db_path) as conn:
+                require_project_permission(
+                    conn,
+                    actor_id=actor_id,
+                    project_id=project_id,
+                    permission=ProjectPermission.DOCUMENT_READ,
+                )
+        except AppError as exc:
+            await websocket.send_json(websocket_error_payload(exc))
+            await websocket.close(code=1008)
+            return
+
+        channel = _project_workspace_channel(project_id)
+        connected = False
+        try:
+            await collaboration_hub.connect(channel, websocket)
+            connected = True
+            await websocket.send_json(
+                {
+                    "type": "project.workspace_state",
+                    "reason": "connected",
+                    "project_id": project_id,
+                    "actor_id": actor_id,
+                }
+            )
+            websocket_rate_limit_config = application.state.websocket_rate_limit_config
+            websocket_rate_limiter = (
+                FixedWindowRateLimiter(
+                    limit=websocket_rate_limit_config.requests,
+                    window_seconds=websocket_rate_limit_config.window_seconds,
+                )
+                if websocket_rate_limit_config.enabled
+                else None
+            )
+
+            while True:
+                try:
+                    message = await websocket.receive_json()
+                    if websocket_rate_limiter is not None:
+                        rate_result = websocket_rate_limiter.check("messages")
+                        if not rate_result["allowed"]:
+                            await websocket.send_json(
+                                websocket_error_payload(
+                                    AppError(
+                                        ErrorCode.RATE_LIMITED,
+                                        "Too many WebSocket messages. Please retry after the rate limit window resets.",
+                                        {
+                                            "limit": rate_result["limit"],
+                                            "window_seconds": websocket_rate_limit_config.window_seconds,
+                                            "retry_after_seconds": rate_result["reset_seconds"],
+                                        },
+                                    )
+                                )
+                            )
+                            await websocket.close(code=1008)
+                            return
+                    if not isinstance(message, dict):
+                        await websocket.send_json(
+                            invalid_realtime_message(
+                                "WebSocket project messages must be JSON objects.",
+                            )
+                        )
+                        continue
+                    message_type = message.get("type")
+                    if message_type == "ping":
+                        await websocket.send_json({"type": "pong"})
+                    elif message_type == "refresh":
+                        await websocket.send_json(
+                            {
+                                "type": "project.workspace_state",
+                                "reason": "refresh",
+                                "project_id": project_id,
+                                "actor_id": actor_id,
+                            }
+                        )
+                    else:
+                        await websocket.send_json(
+                            invalid_realtime_message(
+                                "Unsupported WebSocket project message type.",
+                                {"type": message_type},
+                            )
+                        )
+                except AppError as exc:
+                    await websocket.send_json(websocket_error_payload(exc))
+                    if exc.code in {
+                        ErrorCode.AUTH_REQUIRED,
+                        ErrorCode.PERMISSION_DENIED,
+                        ErrorCode.PROJECT_NOT_FOUND,
+                    }:
+                        await websocket.close(code=1008)
+                        return
+                except ValueError:
+                    await websocket.send_json(
+                        invalid_realtime_message(
+                            "WebSocket project messages must be valid JSON.",
+                        )
+                    )
+        except WebSocketDisconnect:
+            pass
+        finally:
+            if connected:
+                await collaboration_hub.disconnect(channel, websocket)
+
     @application.patch("/documents/{document_id}")
     async def patch_document_endpoint(
         document_id: str,
@@ -1324,6 +1510,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
             result=result,
             reason="document.deleted",
         )
+        await _broadcast_project_documents_changed(
+            project_id=result["project_id"],
+            actor_id=actor_id,
+            reason="document.deleted",
+            documents=[_document_change_summary(result)],
+        )
         return result
 
     @application.post("/documents/{document_id}/restore")
@@ -1343,6 +1535,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
             document_id=document_id,
             result=result,
             reason="document.restored",
+        )
+        await _broadcast_project_documents_changed(
+            project_id=result["project_id"],
+            actor_id=actor_id,
+            reason="document.restored",
+            documents=[_document_change_summary(result)],
         )
         return result
 

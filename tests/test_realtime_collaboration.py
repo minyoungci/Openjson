@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import tempfile
-import unittest
 import asyncio
 import hashlib
+import io
+import json
 import os
+import tempfile
+import unittest
+import zipfile
 from unittest.mock import patch
 from pathlib import Path
 from typing import Any
@@ -27,6 +30,14 @@ class FakeWebSocket:
 
     async def send_json(self, payload: dict[str, Any]) -> None:
         self.messages.append(payload)
+
+
+def make_zip(entries: list[tuple[str, Any]]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for path, content in entries:
+            archive.writestr(path, json.dumps(content))
+    return buffer.getvalue()
 
 
 class RealtimeCollaborationTests(unittest.TestCase):
@@ -92,6 +103,12 @@ class RealtimeCollaborationTests(unittest.TestCase):
             path += f"?actor_id={actor_id}"
         return path
 
+    def _project_ws_path(self, actor_id: str | None = None) -> str:
+        path = f"/ws/projects/{self.project_id}/workspace"
+        if actor_id:
+            path += f"?actor_id={actor_id}"
+        return path
+
     def _session_ws_path(self, token: str) -> str:
         return f"/ws/documents/{self.document['id']}/collaboration?token={token}"
 
@@ -103,6 +120,78 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertEqual(message["reason"], "connected")
         self.assertEqual(message["state"]["document_id"], self.document["id"])
         self.assertEqual(message["state"]["current_version"], 1)
+
+    def test_project_workspace_websocket_broadcasts_document_set_changes(self) -> None:
+        with self.client.websocket_connect(self._project_ws_path(self.viewer_id)) as websocket:
+            connected = websocket.receive_json()
+            create_response = self.client.post(
+                f"/projects/{self.project_id}/documents",
+                headers={"X-Actor-Id": self.editor_id},
+                json={"full_path": "config/project-ws-created.json", "content": {"value": 1}},
+            )
+            created_message = websocket.receive_json()
+            archive = make_zip([("data/project-ws-imported.json", {"value": 2})])
+            import_response = self.client.post(
+                f"/projects/{self.project_id}/imports/zip-apply?reason=Project%20WS%20import",
+                headers={"X-Actor-Id": self.editor_id, "Content-Type": "application/zip"},
+                content=archive,
+            )
+            imported_message = websocket.receive_json()
+            delete_response = self.client.request(
+                "DELETE",
+                f"/documents/{create_response.json()['id']}",
+                headers={"X-Actor-Id": self.owner_id},
+                json={"base_version": create_response.json()["current_version"], "reason": "Project WS delete"},
+            )
+            deleted_message = websocket.receive_json()
+            restore_response = self.client.post(
+                f"/documents/{create_response.json()['id']}/restore",
+                headers={"X-Actor-Id": self.owner_id},
+                json={"base_version": delete_response.json()["current_version"], "reason": "Project WS restore"},
+            )
+            restored_message = websocket.receive_json()
+
+        self.assertEqual(connected["type"], "project.workspace_state")
+        self.assertEqual(connected["reason"], "connected")
+        self.assertEqual(connected["project_id"], self.project_id)
+        self.assertEqual(connected["actor_id"], self.viewer_id)
+
+        created = create_response.json()
+        self.assertEqual(create_response.status_code, 200)
+        self.assertEqual(created_message["type"], "project.documents.changed")
+        self.assertEqual(created_message["reason"], "document.created")
+        self.assertEqual(created_message["project_id"], self.project_id)
+        self.assertEqual(created_message["actor_id"], self.editor_id)
+        self.assertEqual(created_message["documents"][0]["id"], created["id"])
+        self.assertEqual(created_message["documents"][0]["full_path"], "config/project-ws-created.json")
+        self.assertEqual(created_message["documents"][0]["event_type"], "create")
+        self.assertEqual(created_message["documents"][0]["event_id"], created["event_id"])
+
+        imported = import_response.json()
+        self.assertEqual(import_response.status_code, 200)
+        self.assertEqual(imported["imported_count"], 1)
+        self.assertEqual(imported_message["type"], "project.documents.changed")
+        self.assertEqual(imported_message["reason"], "documents.imported")
+        self.assertEqual(imported_message["documents"][0]["id"], imported["created_documents"][0]["id"])
+        self.assertEqual(imported_message["documents"][0]["full_path"], "data/project-ws-imported.json")
+        self.assertEqual(imported_message["documents"][0]["event_type"], "create")
+
+        deleted = delete_response.json()
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(deleted_message["type"], "project.documents.changed")
+        self.assertEqual(deleted_message["reason"], "document.deleted")
+        self.assertEqual(deleted_message["documents"][0]["id"], created["id"])
+        self.assertEqual(deleted_message["documents"][0]["event_type"], "delete")
+        self.assertEqual(deleted_message["documents"][0]["deleted_at"], deleted["deleted_at"])
+
+        restored = restore_response.json()
+        self.assertEqual(restore_response.status_code, 200)
+        self.assertEqual(restored_message["type"], "project.documents.changed")
+        self.assertEqual(restored_message["reason"], "document.restored")
+        self.assertEqual(restored_message["documents"][0]["id"], created["id"])
+        self.assertEqual(restored_message["documents"][0]["event_type"], "restore")
+        self.assertIsNone(restored_message["documents"][0]["deleted_at"])
+        self.assertEqual(restored_message["documents"][0]["event_id"], restored["event_id"])
 
     def test_presence_message_returns_collaboration_state(self) -> None:
         with self.client.websocket_connect(self._ws_path(self.editor_id)) as websocket:

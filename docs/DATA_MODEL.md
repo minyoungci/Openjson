@@ -458,6 +458,12 @@ delete and restore still persist only through existing `json_documents`
 from the accepted mutation response so connected clients can refresh or detach
 their local editor state.
 
+TASK_144 project workspace WebSocket notifications also add no table. Document
+create, ZIP import apply, soft delete, and restore continue to persist only
+through existing `json_documents` and append-only `document_events` rows. The
+`project.documents.changed` payload is an operational project-channel signal so
+connected browser clients can refresh their derived document list and tree.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
