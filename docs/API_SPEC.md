@@ -137,10 +137,27 @@ invite, edit checkpoint, notes, diff, and replay.
 See `docs/TASK_112_PLAN.md` for the production entry UX cleanup that removes
 developer identity fallback from the static browser app.
 See `docs/TASK_113_PLAN.md` for the deployment auth fallback gate.
+See `docs/TASK_114_PLAN.md` for the public deployment version surface.
+
+## Deployment Version
+
+`GET /version` is public and read-only. It reports safe deployment metadata
+used for manual deploy verification:
+
+- `source.git_commit`
+- `source.git_branch`
+- `source.git_repo_slug`
+- `deployment.platform`
+- `deployment.service_name`
+- non-secret `runtime_config` flags such as `actor_header_allowed`
+
+It must not expose secrets, database paths, API tokens, session tokens, SMTP
+passwords, or OIDC client secrets.
 
 ## Bootstrap, Workspace, Project
 
 - `GET /health`
+- `GET /version`
 - `GET /ready`
 - `POST /auth/signup`
 - `POST /auth/login`

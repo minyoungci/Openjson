@@ -66,7 +66,7 @@ def _is_public_request(method: str, path: str) -> bool:
     upper_method = method.upper()
     if upper_method == "OPTIONS":
         return True
-    if path in {"/", "/app", "/favicon.ico", "/health", "/ready"}:
+    if path in {"/", "/app", "/favicon.ico", "/health", "/ready", "/version"}:
         return True
     if path.startswith("/static/"):
         return True

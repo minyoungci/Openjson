@@ -139,7 +139,21 @@ After the service is live:
 
 ```text
 GET https://openjson.thelumen.work/health
+GET https://openjson.thelumen.work/version
 GET https://openjson.thelumen.work/app
+```
+
+`/version` should show the deployed Git commit from Render's
+`RENDER_GIT_COMMIT` default environment variable and
+`runtime_config.actor_header_allowed=false`.
+
+You can run the deployment status smoke from this repo:
+
+```powershell
+python scripts\smoke_deployment_status.py `
+  --base-url https://openjson.thelumen.work `
+  --expect-commit <git-sha> `
+  --expect-actor-header-allowed false
 ```
 
 Then create an account from the UI and run a small document flow:

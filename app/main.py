@@ -67,7 +67,7 @@ from app.document_service import (
 from app.errors import AppError, ErrorCode
 from app.email_service import send_invitation_email
 from app.export_service import export_project_archive
-from app.health_service import health_status, readiness_status
+from app.health_service import health_status, readiness_status, version_status
 from app.integrity_service import (
     check_document_event_chain_integrity,
     check_document_replay_integrity,
@@ -186,6 +186,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
         emit_logs=_env_flag(os.environ.get("OPENJSON_REQUEST_LOGGING")),
     )
     cors_origins = _parse_cors_origins(os.environ.get("OPENJSON_CORS_ORIGINS"))
+    application.state.cors_origins_configured = bool(cors_origins)
     if cors_origins:
         application.add_middleware(
             CORSMiddleware,
@@ -234,6 +235,13 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @application.get("/health")
     def health_endpoint() -> dict:
         return health_status()
+
+    @application.get("/version")
+    def version_endpoint() -> dict:
+        return version_status(
+            allow_actor_header=application.state.allow_actor_header,
+            cors_origins_configured=application.state.cors_origins_configured,
+        )
 
     @application.get("/ready")
     def ready_endpoint() -> dict:

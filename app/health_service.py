@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from app.database import connect
@@ -37,6 +38,43 @@ def health_status() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "openjson-api",
+    }
+
+
+def version_status(
+    *,
+    allow_actor_header: bool,
+    cors_origins_configured: bool,
+) -> dict[str, Any]:
+    return {
+        "service": "openjson-api",
+        "deployment": {
+            "platform": _deployment_platform(),
+            "service_name": _optional_env("RENDER_SERVICE_NAME"),
+            "service_type": _optional_env("RENDER_SERVICE_TYPE"),
+            "external_hostname": _optional_env("RENDER_EXTERNAL_HOSTNAME"),
+        },
+        "source": {
+            "git_commit": _first_env("OPENJSON_GIT_COMMIT", "RENDER_GIT_COMMIT"),
+            "git_branch": _first_env("OPENJSON_GIT_BRANCH", "RENDER_GIT_BRANCH"),
+            "git_repo_slug": _first_env("OPENJSON_GIT_REPO_SLUG", "RENDER_GIT_REPO_SLUG"),
+        },
+        "runtime_config": {
+            "actor_header_allowed": allow_actor_header,
+            "cors_origins_configured": cors_origins_configured,
+            "email_backend": _optional_env("OPENJSON_EMAIL_BACKEND") or "console",
+            "redis_fanout_enabled": bool(_optional_env("OPENJSON_REDIS_URL")),
+            "oidc_configured": all(
+                _optional_env(name)
+                for name in (
+                    "OPENJSON_OIDC_ISSUER",
+                    "OPENJSON_OIDC_CLIENT_ID",
+                    "OPENJSON_OIDC_CLIENT_SECRET",
+                    "OPENJSON_OIDC_REDIRECT_URI",
+                )
+            ),
+            "storage_backend": "sqlite",
+        },
     }
 
 
@@ -85,3 +123,25 @@ def readiness_status(db_path: str) -> dict[str, Any]:
             "required_tables": sorted(REQUIRED_TABLES),
         },
     }
+
+
+def _deployment_platform() -> str:
+    if _optional_env("RENDER"):
+        return "render"
+    return _optional_env("OPENJSON_DEPLOYMENT_PLATFORM") or "local"
+
+
+def _first_env(*names: str) -> str | None:
+    for name in names:
+        value = _optional_env(name)
+        if value:
+            return value
+    return None
+
+
+def _optional_env(name: str) -> str | None:
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None

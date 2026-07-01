@@ -56,6 +56,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 Deployment smoke endpoints:
 
 - `GET /health`
+- `GET /version`
 - `GET /ready`
 
 ## Operational Smoke Commands
@@ -102,22 +103,39 @@ the collaboration checkpoint, adds and reopens a path-level note, verifies notes
 do not mutate the document version or snapshot, and checks diff plus replay
 consistency. See `docs/TASK_111_PLAN.md`.
 
+Deployment status smoke:
+
+```powershell
+python scripts\smoke_deployment_status.py --base-url http://127.0.0.1:8000
+```
+
+For the official URL after a manual Render deploy:
+
+```powershell
+python scripts\smoke_deployment_status.py `
+  --base-url https://openjson.thelumen.work `
+  --expect-commit <git-sha> `
+  --expect-actor-header-allowed false
+```
+
+This smoke checks `/health`, `/version`, and `/app`. It is read-only and does
+not create users, projects, documents, or events. See `docs/TASK_114_PLAN.md`.
+
 Local non-realtime editor shell:
 
 ```powershell
 $env:OPENJSON_DB_PATH = "D:\OpenJson\openjson.sqlite3"
-python scripts\seed_dev.py
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000/app`, then use the seeded defaults
-`actor_id=user_dev` and `project_id=project_dev`. The shell uses the same
-versioned save, preview, validation, conflict preview, history, diff, and
-rollback APIs as Swagger. It is not realtime collaboration. See
-`docs/TASK_096_PLAN.md`.
+Open `http://127.0.0.1:8000/app`, sign up or log in, then create or open a
+project. The browser app uses session bearer tokens, not manually pasted
+`actor_id` values. The shell uses the same versioned save, preview, validation,
+conflict preview, history, diff, and rollback APIs as Swagger. See
+`docs/TASK_096_PLAN.md` and `docs/TASK_112_PLAN.md`.
 The shell also supports shareable local URLs such as
-`/app?project_id=project_dev&document_id=<document_id>&actor_id=user_dev`,
-browser-local JSON file import, and non-realtime conflict recovery controls.
+`/app?project_id=<project_id>&document_id=<document_id>`, browser-local JSON
+file import, and non-realtime conflict recovery controls.
 Share URLs do not include bearer tokens. See `docs/TASK_097_PLAN.md`.
 The shell also renders bound schema metadata and previews create-time
 file-pattern schema matches from existing read-only schema APIs. See

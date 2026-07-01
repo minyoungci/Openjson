@@ -7,13 +7,15 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.database import init_db
 from app.errors import AppError, ErrorCode
-from app.health_service import readiness_status
+from app.health_service import readiness_status, version_status
 from app.main import create_app
+from scripts.smoke_deployment_status import run_deployment_status_smoke
 
 
 class DeploymentHardeningTests(unittest.TestCase):
@@ -26,15 +28,51 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.tmp.cleanup()
         os.environ.pop("OPENJSON_CORS_ORIGINS", None)
 
-    def test_health_and_ready_endpoints_are_public(self) -> None:
-        client = TestClient(create_app(self.db_path))
+    def _counts(self) -> dict[str, int]:
+        from app.database import connect
 
-        health = client.get("/health")
-        ready = client.get("/ready")
+        with connect(self.db_path) as conn:
+            return {
+                "documents": conn.execute("SELECT COUNT(*) AS count FROM json_documents").fetchone()["count"],
+                "events": conn.execute("SELECT COUNT(*) AS count FROM document_events").fetchone()["count"],
+            }
+
+    def test_health_ready_and_version_endpoints_are_public(self) -> None:
+        before = self._counts()
+        env = {
+            "RENDER": "true",
+            "RENDER_GIT_COMMIT": "abc123",
+            "RENDER_GIT_BRANCH": "main",
+            "RENDER_GIT_REPO_SLUG": "minyoungci/Openjson",
+            "RENDER_SERVICE_NAME": "openjson",
+            "RENDER_SERVICE_TYPE": "web",
+            "RENDER_EXTERNAL_HOSTNAME": "openjson-test.onrender.com",
+            "OPENJSON_ALLOW_ACTOR_HEADER": "0",
+            "OPENJSON_CORS_ORIGINS": "https://openjson.thelumen.work",
+            "OPENJSON_EMAIL_BACKEND": "console",
+            "OPENJSON_SMTP_PASSWORD": "do-not-leak",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            client = TestClient(create_app(self.db_path))
+
+            health = client.get("/health", headers={"X-Actor-Id": "spoofed"})
+            version = client.get("/version", headers={"X-Actor-Id": "spoofed"})
+            ready = client.get("/ready")
 
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["status"], "ok")
         self.assertEqual(health.json()["service"], "openjson-api")
+        self.assertEqual(version.status_code, 200)
+        self.assertEqual(version.json()["deployment"]["platform"], "render")
+        self.assertEqual(version.json()["deployment"]["service_name"], "openjson")
+        self.assertEqual(version.json()["deployment"]["service_type"], "web")
+        self.assertEqual(version.json()["source"]["git_commit"], "abc123")
+        self.assertEqual(version.json()["source"]["git_branch"], "main")
+        self.assertEqual(version.json()["source"]["git_repo_slug"], "minyoungci/Openjson")
+        self.assertFalse(version.json()["runtime_config"]["actor_header_allowed"])
+        self.assertTrue(version.json()["runtime_config"]["cors_origins_configured"])
+        self.assertEqual(version.json()["runtime_config"]["email_backend"], "console")
+        self.assertNotIn("do-not-leak", json.dumps(version.json()))
         self.assertEqual(ready.status_code, 200)
         self.assertEqual(ready.json()["status"], "ready")
         self.assertTrue(ready.json()["database"]["connected"])
@@ -50,6 +88,32 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn("document_events", ready.json()["database"]["required_tables"])
         self.assertIn("audit_log", ready.json()["database"]["required_tables"])
         self.assertIn("schema_migrations", ready.json()["database"]["required_tables"])
+        self.assertEqual(self._counts(), before)
+
+    def test_version_status_prefers_explicit_openjson_git_metadata(self) -> None:
+        env = {
+            "OPENJSON_GIT_COMMIT": "explicit-sha",
+            "OPENJSON_GIT_BRANCH": "release",
+            "OPENJSON_GIT_REPO_SLUG": "custom/repo",
+            "RENDER_GIT_COMMIT": "render-sha",
+            "RENDER_GIT_BRANCH": "main",
+            "RENDER_GIT_REPO_SLUG": "render/repo",
+            "OPENJSON_REDIS_URL": "redis://example",
+            "OPENJSON_OIDC_ISSUER": "https://issuer.example",
+            "OPENJSON_OIDC_CLIENT_ID": "client",
+            "OPENJSON_OIDC_CLIENT_SECRET": "secret",
+            "OPENJSON_OIDC_REDIRECT_URI": "https://openjson.example/auth/oidc/callback",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            payload = version_status(allow_actor_header=True, cors_origins_configured=False)
+
+        self.assertEqual(payload["source"]["git_commit"], "explicit-sha")
+        self.assertEqual(payload["source"]["git_branch"], "release")
+        self.assertEqual(payload["source"]["git_repo_slug"], "custom/repo")
+        self.assertTrue(payload["runtime_config"]["actor_header_allowed"])
+        self.assertTrue(payload["runtime_config"]["redis_fanout_enabled"])
+        self.assertTrue(payload["runtime_config"]["oidc_configured"])
+        self.assertNotIn("secret", json.dumps(payload))
 
     def test_ready_failure_uses_standard_error_envelope(self) -> None:
         empty_db = str(Path(self.tmp.name) / "empty.sqlite3")
@@ -120,6 +184,29 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn("__pycache__/", dockerignore)
         self.assertIn("OPENJSON_ALLOW_ACTOR_HEADER", render_yaml)
         self.assertIn('value: "0"', render_yaml)
+
+    def test_deployment_status_smoke_runner_uses_public_read_only_surfaces(self) -> None:
+        before = self._counts()
+        with patch.dict(
+            os.environ,
+            {
+                "OPENJSON_GIT_COMMIT": "smoke-sha",
+                "OPENJSON_ALLOW_ACTOR_HEADER": "0",
+            },
+            clear=False,
+        ):
+            client = TestClient(create_app(self.db_path))
+            result = run_deployment_status_smoke(
+                client,
+                expect_commit="smoke",
+                expect_actor_header_allowed=False,
+            )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["version"]["source"]["git_commit"], "smoke-sha")
+        self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
+        self.assertTrue(result["app"]["contains_openjson"])
+        self.assertEqual(self._counts(), before)
 
 
 if __name__ == "__main__":
