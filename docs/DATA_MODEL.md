@@ -464,6 +464,15 @@ through existing `json_documents` and append-only `document_events` rows. The
 `project.documents.changed` payload is an operational project-channel signal so
 connected browser clients can refresh their derived document list and tree.
 
+TASK_145 human-readable collaboration actors also adds no table. It preserves
+durable `actor_id` values in event and collaboration payloads while joining
+`users.display_name` into read-only views for browser readability.
+
+TASK_146 human-readable comment authors also adds no table. It preserves
+durable `comment_threads.created_by`, `comment_threads.resolved_by`, and
+`comments.author_id` identifiers while joining `users.display_name` into
+read-only comment payloads for browser readability.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -124,6 +124,8 @@ class CommentTests(unittest.TestCase):
         self.assertEqual(event_thread["event_id"], event_id)
         listed = list_comment_threads(self.db_path, document_id=document["id"], actor_id=self.users["viewer"])
         self.assertEqual(len(listed["threads"]), 3)
+        self.assertEqual(listed["threads"][0]["created_by_display_name"], "Reviewer")
+        self.assertEqual(listed["threads"][0]["comments"][0]["author_display_name"], "Reviewer")
         self.assertEqual(self._event_count(document["id"]), 2)
         self.assertEqual(self._snapshot(document["id"])["learning_rate"], 0.2)
 
@@ -176,7 +178,9 @@ class CommentTests(unittest.TestCase):
         reopened = reopen_comment_thread(self.db_path, thread_id=thread["id"], actor_id=self.users["reviewer"])
 
         self.assertEqual(reply["body"], "Verified.")
+        self.assertEqual(reply["author_display_name"], "Owner")
         self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["resolved_by_display_name"], "Reviewer")
         self.assertEqual(reopened["status"], "open")
         self.assertEqual(len(reopened["comments"]), 2)
         self.assertEqual(self._event_count(document["id"]), before_event_count)
@@ -225,6 +229,7 @@ class CommentTests(unittest.TestCase):
 
         listed = list_comment_threads(self.db_path, document_id=document["id"], actor_id=self.users["reviewer"])
         self.assertEqual(len(listed["threads"]), 1)
+        self.assertEqual(listed["threads"][0]["created_by_display_name"], "Reviewer")
         with self.assertRaises(AppError) as rejected:
             create_comment_thread(
                 self.db_path,

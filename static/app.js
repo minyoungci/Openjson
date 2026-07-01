@@ -1665,7 +1665,7 @@
 
     const meta = document.createElement("span");
     meta.className = "muted";
-    meta.textContent = `${thread.created_by} / ${thread.created_at}`;
+    meta.textContent = `${thread.created_by_display_name || thread.created_by} / ${thread.created_at}`;
     wrapper.appendChild(meta);
 
     for (const comment of thread.comments || []) {
@@ -1675,7 +1675,7 @@
       body.textContent = comment.body;
       const detail = document.createElement("span");
       detail.className = "muted";
-      detail.textContent = `${comment.author_id} / ${comment.created_at}`;
+      detail.textContent = `${comment.author_display_name || comment.author_id} / ${comment.created_at}`;
       row.append(body, detail);
       wrapper.appendChild(row);
     }

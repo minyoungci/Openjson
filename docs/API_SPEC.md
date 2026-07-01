@@ -188,6 +188,9 @@ See `docs/TASK_143_PLAN.md` for WebSocket document lifecycle update
 notifications.
 See `docs/TASK_144_PLAN.md` for project-scoped document-list update
 notifications.
+See `docs/TASK_145_PLAN.md` for human-readable actor display names in
+collaboration and event views.
+See `docs/TASK_146_PLAN.md` for human-readable comment author display names.
 
 ## Deployment Version
 
@@ -569,6 +572,11 @@ contains `document_id`, `thread_id`, `reason`, and optional `comment_id` or
 `GET /documents/{document_id}/comment-threads` for the selected document. These
 notifications are operational only and do not create document events or mutate
 JSON snapshots.
+Comment thread and comment list payloads preserve durable `created_by`,
+`resolved_by`, and `author_id` identifiers while also including
+`created_by_display_name`, `resolved_by_display_name`, and
+`author_display_name` when the corresponding user row is available. Browser UI
+should prefer display names for readability and keep ids only as fallbacks.
 
 Document soft-delete and restore mutations send `document.lifecycle` over the
 same document WebSocket channel after the mutation transaction commits. The

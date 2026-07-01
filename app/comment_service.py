@@ -53,7 +53,18 @@ def _document_row_including_deleted(conn: sqlite3.Connection, document_id: str) 
 
 
 def _thread_row(conn: sqlite3.Connection, thread_id: str) -> sqlite3.Row:
-    row = conn.execute("SELECT * FROM comment_threads WHERE id = ?", (thread_id,)).fetchone()
+    row = conn.execute(
+        """
+        SELECT t.*,
+               creator.display_name AS created_by_display_name,
+               resolver.display_name AS resolved_by_display_name
+        FROM comment_threads AS t
+        LEFT JOIN users AS creator ON creator.id = t.created_by
+        LEFT JOIN users AS resolver ON resolver.id = t.resolved_by
+        WHERE t.id = ?
+        """,
+        (thread_id,),
+    ).fetchone()
     if row is None:
         raise AppError(
             ErrorCode.COMMENT_THREAD_NOT_FOUND,
@@ -129,22 +140,26 @@ def _validate_anchor(
 
 
 def _row_to_comment(row: sqlite3.Row) -> dict[str, Any]:
-    return {
+    comment = {
         "id": row["id"],
         "thread_id": row["thread_id"],
         "author_id": row["author_id"],
         "body": row["body"],
         "created_at": row["created_at"],
     }
+    if "author_display_name" in row.keys():
+        comment["author_display_name"] = row["author_display_name"]
+    return comment
 
 
 def _comments_for_thread(conn: sqlite3.Connection, thread_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
         """
-        SELECT *
-        FROM comments
-        WHERE thread_id = ?
-        ORDER BY created_at ASC, id ASC
+        SELECT c.*, u.display_name AS author_display_name
+        FROM comments AS c
+        LEFT JOIN users AS u ON u.id = c.author_id
+        WHERE c.thread_id = ?
+        ORDER BY c.created_at ASC, c.id ASC
         """,
         (thread_id,),
     ).fetchall()
@@ -152,7 +167,7 @@ def _comments_for_thread(conn: sqlite3.Connection, thread_id: str) -> list[dict[
 
 
 def _row_to_thread(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
-    return {
+    thread = {
         "id": row["id"],
         "project_id": row["project_id"],
         "document_id": row["document_id"],
@@ -167,6 +182,11 @@ def _row_to_thread(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]
         "resolved_at": row["resolved_at"],
         "comments": _comments_for_thread(conn, row["id"]),
     }
+    if "created_by_display_name" in row.keys():
+        thread["created_by_display_name"] = row["created_by_display_name"]
+    if "resolved_by_display_name" in row.keys():
+        thread["resolved_by_display_name"] = row["resolved_by_display_name"]
+    return thread
 
 
 def create_comment_thread(
@@ -257,10 +277,14 @@ def list_comment_threads(
         )
         rows = conn.execute(
             """
-            SELECT *
-            FROM comment_threads
-            WHERE document_id = ?
-            ORDER BY created_at ASC, id ASC
+            SELECT t.*,
+                   creator.display_name AS created_by_display_name,
+                   resolver.display_name AS resolved_by_display_name
+            FROM comment_threads AS t
+            LEFT JOIN users AS creator ON creator.id = t.created_by
+            LEFT JOIN users AS resolver ON resolver.id = t.resolved_by
+            WHERE t.document_id = ?
+            ORDER BY t.created_at ASC, t.id ASC
             """,
             (document_id,),
         ).fetchall()
@@ -295,7 +319,17 @@ def add_comment(
             (comment_id, thread_id, actor_id, body, now),
         )
         conn.execute("UPDATE comment_threads SET updated_at = ? WHERE id = ?", (now, thread_id))
-        return _row_to_comment(conn.execute("SELECT * FROM comments WHERE id = ?", (comment_id,)).fetchone())
+        return _row_to_comment(
+            conn.execute(
+                """
+                SELECT c.*, u.display_name AS author_display_name
+                FROM comments AS c
+                LEFT JOIN users AS u ON u.id = c.author_id
+                WHERE c.id = ?
+                """,
+                (comment_id,),
+            ).fetchone()
+        )
 
 
 def resolve_comment_thread(

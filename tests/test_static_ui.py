@@ -144,6 +144,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("event.actor_display_name || event.actor_id", js.text)
         self.assertIn("checkpoint.display_name || checkpoint.actor_id", js.text)
         self.assertIn("user.display_name || user.actor_id", js.text)
+        self.assertIn("thread.created_by_display_name || thread.created_by", js.text)
+        self.assertIn("comment.author_display_name || comment.author_id", js.text)
         self.assertIn("renderInvitationResult", js.text)
         self.assertIn("Invitation email sent", js.text)
         self.assertIn("buildInviteUrl", js.text)
