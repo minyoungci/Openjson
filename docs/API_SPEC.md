@@ -231,6 +231,8 @@ document switches, version changes, or overlapping rollback requests.
 See `docs/TASK_164_PLAN.md` for guarding stale browser
 `project.documents.changed` refresh status after project switches, document
 switches, dirty editor changes, or overlapping project document-change refreshes.
+See `docs/TASK_165_PLAN.md` for guarding stale browser collaboration-state
+polling responses and failures after document switches or version changes.
 
 ## Deployment Version
 
@@ -550,6 +552,9 @@ The static browser client applies a `collaboration_state` payload only when its
 `document_id` still matches the currently selected document, so late polling or
 WebSocket messages from a previous document cannot overwrite the active
 collaboration panel.
+HTTP polling fallback requests also capture the selected document id and current
+version, and stale polling successes or failures are ignored before rendering
+the collaboration panel.
 Accepted HTTP document mutations that leave the document active,
 including `PATCH /documents/{id}`, `PUT /documents/{id}/content`, and
 `POST /documents/{id}/rollback`, broadcast a fresh `collaboration_state` to

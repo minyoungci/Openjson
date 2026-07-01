@@ -146,6 +146,7 @@
     presenceTimer: null,
     collaborationSocket: null,
     collaborationReconnectTimer: null,
+    collaborationStateRequestId: 0,
     collaborationTransport: "polling",
     collaborationStopped: false,
     projectSocket: null,
@@ -2161,6 +2162,7 @@
 
   function stopCollaborationLoop() {
     state.collaborationStopped = true;
+    invalidateCollaborationStateRequests();
     sendPresenceLeave(state.activePresenceDocumentId || state.selectedDocumentId);
     state.activePresenceDocumentId = "";
     window.clearInterval(state.presenceTimer);
@@ -2725,13 +2727,40 @@
   }
 
   async function refreshCollaborationState() {
-    if (!state.selectedDocumentId || !state.currentVersion) {
+    const documentId = state.selectedDocumentId;
+    const currentVersion = state.currentVersion;
+    if (!documentId || !currentVersion) {
       return;
     }
-    const result = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/collaboration-state`, {
-      query: { since_version: state.currentVersion },
-    });
+    const requestId = state.collaborationStateRequestId + 1;
+    state.collaborationStateRequestId = requestId;
+    let result;
+    try {
+      result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/collaboration-state`, {
+        query: { since_version: currentVersion },
+      });
+    } catch (error) {
+      if (!isCurrentCollaborationStateRequest(requestId, documentId, currentVersion)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentCollaborationStateRequest(requestId, documentId, currentVersion)) {
+      return;
+    }
     await applyCollaborationState(result);
+  }
+
+  function isCurrentCollaborationStateRequest(requestId, documentId, currentVersion) {
+    return (
+      state.collaborationStateRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.currentVersion === currentVersion
+    );
+  }
+
+  function invalidateCollaborationStateRequests() {
+    state.collaborationStateRequestId += 1;
   }
 
   async function applyCollaborationState(result) {

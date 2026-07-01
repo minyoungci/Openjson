@@ -509,6 +509,10 @@ static browser client ignores `collaboration_state` payloads whose
 `document_id` no longer matches the selected document. This is client-owned
 operational state only and does not affect `editor_presence`, canonical
 snapshots, or append-only `document_events`.
+TASK_165 stale collaboration-state polling response guarding also adds no
+table. The static browser client tracks HTTP polling fallback requests in
+memory and applies or reports them only while the selected document id and
+current version still match the captured request context.
 
 TASK_152 stale live-text payload handling also adds no table. The static
 browser client ignores document WebSocket callbacks from sockets that are no

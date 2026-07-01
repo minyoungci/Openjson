@@ -204,6 +204,29 @@ class StaticUiTests(unittest.TestCase):
             "function sendRealtimeMessage", 1
         )[0]
         self.assertIn("if (state.collaborationSocket !== socket)", collaboration_socket_handler)
+        collaboration_state_loader = js.text.split("async function refreshCollaborationState()", 1)[1].split(
+            "async function applyCollaborationState", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", collaboration_state_loader)
+        self.assertIn("const currentVersion = state.currentVersion", collaboration_state_loader)
+        self.assertIn("const requestId = state.collaborationStateRequestId + 1", collaboration_state_loader)
+        self.assertIn("state.collaborationStateRequestId = requestId", collaboration_state_loader)
+        self.assertIn("/documents/${encodeURIComponent(documentId)}/collaboration-state", collaboration_state_loader)
+        self.assertIn("query: { since_version: currentVersion }", collaboration_state_loader)
+        self.assertIn(
+            "if (!isCurrentCollaborationStateRequest(requestId, documentId, currentVersion))",
+            collaboration_state_loader,
+        )
+        self.assertIn("function isCurrentCollaborationStateRequest(requestId, documentId, currentVersion)", js.text)
+        self.assertIn("state.collaborationStateRequestId === requestId", js.text)
+        self.assertIn("state.selectedDocumentId === documentId", js.text)
+        self.assertIn("state.currentVersion === currentVersion", js.text)
+        self.assertIn("function invalidateCollaborationStateRequests()", js.text)
+        self.assertIn("state.collaborationStateRequestId += 1", js.text)
+        collaboration_stop = js.text.split("function stopCollaborationLoop()", 1)[1].split(
+            "function ensureProjectWorkspaceSocket", 1
+        )[0]
+        self.assertIn("invalidateCollaborationStateRequests()", collaboration_stop)
         self.assertIn("markLiveTextOperationUnacknowledged", js.text)
         self.assertIn("resyncLiveTextSessionAfterConflict", js.text)
         self.assertIn("Live text change is still syncing.", js.text)
