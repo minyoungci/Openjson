@@ -557,6 +557,15 @@ not affect `project_members`, membership audit events, canonical snapshots,
 append-only `document_events`, schemas, comments, reviews, or WebSocket server
 state.
 
+TASK_159 stale project-home load guarding also adds no table. The static
+browser client tracks project-home workspace/project list requests in memory
+and applies loaded workspaces, project rows, and per-workspace load errors only
+while the response still matches the latest project-home request. Opening a
+project, starting project creation, or clearing session state invalidates
+outstanding project-home loads. This is client-only state and does not affect
+workspaces, projects, memberships, canonical snapshots, append-only
+`document_events`, schemas, comments, reviews, or WebSocket server state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

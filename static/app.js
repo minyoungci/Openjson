@@ -115,6 +115,7 @@
     workspaces: [],
     availableProjects: [],
     projectHomeErrors: [],
+    projectHomeRequestId: 0,
     selectedDocumentId: initialParams.get("document_id") || localStorage.getItem("openjson.selectedDocumentId") || "",
     selectedEditorState: null,
     bootstrap: null,
@@ -498,6 +499,8 @@
       showAuthScreen(invitePromptText());
       return;
     }
+    const requestId = state.projectHomeRequestId + 1;
+    state.projectHomeRequestId = requestId;
     invalidateBootstrapRequests();
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
@@ -508,25 +511,48 @@
     syncButtons();
     try {
       const workspaceData = await apiFetch("/workspaces");
-      state.workspaces = workspaceData.workspaces || [];
-      state.projectHomeErrors = [];
+      if (!isCurrentProjectHomeRequest(requestId)) {
+        return;
+      }
+      const workspaces = workspaceData.workspaces || [];
+      const projectHomeErrors = [];
       const projectGroups = await Promise.all(
-        state.workspaces.map(async (workspace) => {
+        workspaces.map(async (workspace) => {
           try {
             const projectData = await apiFetch(`/workspaces/${encodeURIComponent(workspace.id)}/projects`);
             return (projectData.projects || []).map((project) => ({ workspace, project }));
           } catch (error) {
-            state.projectHomeErrors.push(error);
+            projectHomeErrors.push(error);
             return [];
           }
         })
       );
+      if (!isCurrentProjectHomeRequest(requestId)) {
+        return;
+      }
+      state.workspaces = workspaces;
+      state.projectHomeErrors = projectHomeErrors;
       state.availableProjects = projectGroups.flat();
       renderProjectHome();
+    } catch (error) {
+      if (!isCurrentProjectHomeRequest(requestId)) {
+        return;
+      }
+      throw error;
     } finally {
-      state.loading = false;
-      syncButtons();
+      if (isCurrentProjectHomeRequest(requestId)) {
+        state.loading = false;
+        syncButtons();
+      }
     }
+  }
+
+  function isCurrentProjectHomeRequest(requestId) {
+    return state.projectHomeRequestId === requestId;
+  }
+
+  function invalidateProjectHomeRequests() {
+    state.projectHomeRequestId += 1;
   }
 
   async function createProjectFromGate() {
@@ -541,6 +567,7 @@
       renderText(els.projectSetupOutput, "Workspace name and project name are required.", "error-text");
       return;
     }
+    invalidateProjectHomeRequests();
     state.loading = true;
     showProjectCreateMode();
     syncButtons();
@@ -564,6 +591,7 @@
   }
 
   async function openProject(projectId, selectedDocumentId) {
+    invalidateProjectHomeRequests();
     setProjectId(projectId);
     if (!selectedDocumentId) {
       state.selectedDocumentId = "";
@@ -753,6 +781,7 @@
     state.refreshToken = "";
     state.projectId = "";
     state.selectedDocumentId = "";
+    invalidateProjectHomeRequests();
     invalidateBootstrapRequests();
     invalidateTeamMembersRequests();
     state.bootstrap = null;

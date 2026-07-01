@@ -216,6 +216,8 @@ See `docs/TASK_157_PLAN.md` for guarding stale browser create-document schema
 match preview responses after project, path, or mode changes.
 See `docs/TASK_158_PLAN.md` for guarding stale browser team member refresh
 responses after project navigation or session changes.
+See `docs/TASK_159_PLAN.md` for guarding stale browser project-home list
+responses after project navigation, creation, or session changes.
 
 ## Deployment Version
 
@@ -665,6 +667,11 @@ Manual team member refreshes in the static browser are applied only when the
 response still belongs to the latest member refresh request for the active
 project id. Returning to project selection or clearing session state invalidates
 outstanding member refreshes.
+Project-home workspace/project list loads in the static browser are applied
+only when the response still belongs to the latest project-home request. Opening
+a project, starting project creation, or clearing session state invalidates
+outstanding project-home loads, and stale failures are ignored instead of
+rendering into the current screen.
 
 Offline sync accepts a batch of queued client content-save operations:
 

@@ -247,11 +247,22 @@ class StaticUiTests(unittest.TestCase):
         project_home_loader = js.text.split("async function loadProjectHome()", 1)[1].split(
             "async function createProjectFromGate", 1
         )[0]
+        self.assertIn("const requestId = state.projectHomeRequestId + 1", project_home_loader)
+        self.assertIn("state.projectHomeRequestId = requestId", project_home_loader)
         self.assertIn("invalidateBootstrapRequests()", project_home_loader)
         self.assertIn("invalidateTeamMembersRequests()", project_home_loader)
         self.assertIn("stopCollaborationLoop()", project_home_loader)
         self.assertIn("stopProjectWorkspaceSocket()", project_home_loader)
+        self.assertIn("if (!isCurrentProjectHomeRequest(requestId))", project_home_loader)
+        self.assertIn("state.workspaces = workspaces", project_home_loader)
+        self.assertIn("state.projectHomeErrors = projectHomeErrors", project_home_loader)
+        self.assertIn("function isCurrentProjectHomeRequest(requestId)", js.text)
+        self.assertIn("function invalidateProjectHomeRequests()", js.text)
+        self.assertIn("state.projectHomeRequestId += 1", js.text)
+        project_opener = js.text.split("async function openProject", 1)[1].split("function setProjectId", 1)[0]
+        self.assertIn("invalidateProjectHomeRequests()", project_opener)
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
+        self.assertIn("invalidateProjectHomeRequests()", session_clearer)
         self.assertIn("invalidateTeamMembersRequests()", session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1
