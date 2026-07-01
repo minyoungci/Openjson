@@ -69,10 +69,15 @@ Optional local HTTP rate limit:
 $env:OPENJSON_RATE_LIMIT_ENABLED = "1"
 $env:OPENJSON_RATE_LIMIT_REQUESTS = "120"
 $env:OPENJSON_RATE_LIMIT_WINDOW_SECONDS = "60"
+$env:OPENJSON_WS_RATE_LIMIT_ENABLED = "1"
+$env:OPENJSON_WS_RATE_LIMIT_MESSAGES = "120"
+$env:OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS = "60"
 ```
 
 Limited requests return `RATE_LIMITED` with HTTP 429. `/health`, `/ready`, and
 `OPTIONS` are exempt.
+Limited WebSocket collaboration connections receive a structured
+`RATE_LIMITED` error payload and then close.
 
 ## Operational Smoke Commands
 
@@ -136,7 +141,8 @@ python scripts\smoke_deployment_status.py `
 This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
 and does not create users, projects, documents, or events. See
 `docs/TASK_114_PLAN.md`, `docs/TASK_115_PLAN.md`, and
-`docs/TASK_116_PLAN.md`.
+`docs/TASK_116_PLAN.md`. See `docs/TASK_117_PLAN.md` for WebSocket message
+rate limiting.
 
 Local non-realtime editor shell:
 

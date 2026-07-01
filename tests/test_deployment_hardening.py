@@ -36,6 +36,9 @@ class DeploymentHardeningTests(unittest.TestCase):
         os.environ.pop("OPENJSON_RATE_LIMIT_ENABLED", None)
         os.environ.pop("OPENJSON_RATE_LIMIT_REQUESTS", None)
         os.environ.pop("OPENJSON_RATE_LIMIT_WINDOW_SECONDS", None)
+        os.environ.pop("OPENJSON_WS_RATE_LIMIT_ENABLED", None)
+        os.environ.pop("OPENJSON_WS_RATE_LIMIT_MESSAGES", None)
+        os.environ.pop("OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS", None)
 
     def _counts(self) -> dict[str, int]:
         from app.database import connect
@@ -84,6 +87,9 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertFalse(version.json()["runtime_config"]["rate_limit_enabled"])
         self.assertEqual(version.json()["runtime_config"]["rate_limit_requests"], 120)
         self.assertEqual(version.json()["runtime_config"]["rate_limit_window_seconds"], 60)
+        self.assertFalse(version.json()["runtime_config"]["websocket_rate_limit_enabled"])
+        self.assertEqual(version.json()["runtime_config"]["websocket_rate_limit_messages"], 120)
+        self.assertEqual(version.json()["runtime_config"]["websocket_rate_limit_window_seconds"], 60)
         self.assertNotIn("do-not-leak", json.dumps(version.json()))
         self.assertEqual(ready.status_code, 200)
         self.assertEqual(ready.json()["status"], "ready")
@@ -126,6 +132,7 @@ class DeploymentHardeningTests(unittest.TestCase):
                 allow_actor_header=True,
                 cors_origins_configured=False,
                 rate_limit_config=RateLimitConfig(enabled=True, requests=77, window_seconds=30),
+                websocket_rate_limit_config=RateLimitConfig(enabled=True, requests=33, window_seconds=20),
             )
 
         self.assertEqual(payload["source"]["git_commit"], "explicit-sha")
@@ -135,6 +142,9 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertTrue(payload["runtime_config"]["rate_limit_enabled"])
         self.assertEqual(payload["runtime_config"]["rate_limit_requests"], 77)
         self.assertEqual(payload["runtime_config"]["rate_limit_window_seconds"], 30)
+        self.assertTrue(payload["runtime_config"]["websocket_rate_limit_enabled"])
+        self.assertEqual(payload["runtime_config"]["websocket_rate_limit_messages"], 33)
+        self.assertEqual(payload["runtime_config"]["websocket_rate_limit_window_seconds"], 20)
         self.assertTrue(payload["runtime_config"]["redis_fanout_enabled"])
         self.assertTrue(payload["runtime_config"]["oidc_configured"])
         self.assertNotIn("secret", json.dumps(payload))
@@ -299,6 +309,8 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertIn('value: "0"', render_yaml)
         self.assertIn("OPENJSON_RATE_LIMIT_ENABLED", render_yaml)
         self.assertIn("OPENJSON_RATE_LIMIT_REQUESTS", render_yaml)
+        self.assertIn("OPENJSON_WS_RATE_LIMIT_ENABLED", render_yaml)
+        self.assertIn("OPENJSON_WS_RATE_LIMIT_MESSAGES", render_yaml)
 
     def test_deployment_status_smoke_runner_uses_public_read_only_surfaces(self) -> None:
         before = self._counts()
@@ -310,6 +322,9 @@ class DeploymentHardeningTests(unittest.TestCase):
                 "OPENJSON_RATE_LIMIT_ENABLED": "1",
                 "OPENJSON_RATE_LIMIT_REQUESTS": "10",
                 "OPENJSON_RATE_LIMIT_WINDOW_SECONDS": "60",
+                "OPENJSON_WS_RATE_LIMIT_ENABLED": "1",
+                "OPENJSON_WS_RATE_LIMIT_MESSAGES": "10",
+                "OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS": "60",
             },
             clear=False,
         ):
@@ -324,6 +339,7 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(result["ready"]["database"]["migrations"]["status"], "ok")
         self.assertEqual(result["version"]["source"]["git_commit"], "smoke-sha")
         self.assertTrue(result["version"]["runtime_config"]["rate_limit_enabled"])
+        self.assertTrue(result["version"]["runtime_config"]["websocket_rate_limit_enabled"])
         self.assertFalse(result["version"]["runtime_config"]["actor_header_allowed"])
         self.assertTrue(result["app"]["contains_openjson"])
         self.assertEqual(self._counts(), before)

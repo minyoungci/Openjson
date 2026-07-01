@@ -62,6 +62,12 @@ See `docs/MIGRATIONS_BASELINE.md` for the SQLite MVP migration ledger policy.
   `120`.
 - `OPENJSON_RATE_LIMIT_WINDOW_SECONDS`: fixed window size in seconds. Defaults
   to `60`.
+- `OPENJSON_WS_RATE_LIMIT_ENABLED`: set to `1`, `true`, or `yes` to enable the
+  in-process per-connection WebSocket message limit.
+- `OPENJSON_WS_RATE_LIMIT_MESSAGES`: message count per fixed window. Defaults
+  to `120`.
+- `OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS`: fixed window size in seconds.
+  Defaults to `60`.
 
 Example:
 
@@ -69,6 +75,7 @@ Example:
 $env:OPENJSON_DB_PATH = "D:\OpenJson\openjson.sqlite3"
 $env:OPENJSON_CORS_ORIGINS = "http://localhost:3000"
 $env:OPENJSON_RATE_LIMIT_ENABLED = "1"
+$env:OPENJSON_WS_RATE_LIMIT_ENABLED = "1"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 

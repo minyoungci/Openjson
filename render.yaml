@@ -33,3 +33,9 @@ services:
         value: "120"
       - key: OPENJSON_RATE_LIMIT_WINDOW_SECONDS
         value: "60"
+      - key: OPENJSON_WS_RATE_LIMIT_ENABLED
+        value: "1"
+      - key: OPENJSON_WS_RATE_LIMIT_MESSAGES
+        value: "120"
+      - key: OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS
+        value: "60"

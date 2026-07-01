@@ -144,6 +144,7 @@ See `docs/TASK_113_PLAN.md` for the deployment auth fallback gate.
 See `docs/TASK_114_PLAN.md` for the public deployment version surface.
 See `docs/TASK_115_PLAN.md` for the readiness migration gate.
 See `docs/TASK_116_PLAN.md` for the HTTP rate limit guard.
+See `docs/TASK_117_PLAN.md` for the WebSocket message rate limit guard.
 
 ## Deployment Version
 
@@ -164,6 +165,9 @@ It may include non-secret rate-limit flags:
 - `runtime_config.rate_limit_enabled`
 - `runtime_config.rate_limit_requests`
 - `runtime_config.rate_limit_window_seconds`
+- `runtime_config.websocket_rate_limit_enabled`
+- `runtime_config.websocket_rate_limit_messages`
+- `runtime_config.websocket_rate_limit_window_seconds`
 
 ## Deployment Readiness
 
@@ -426,7 +430,9 @@ insert/delete/replace operations; they become durable only when
 `text_session.commit` parses the current collaborative text as valid JSON and
 writes a normal append-only document update event. `OPENJSON_REDIS_URL` enables
 optional Redis fanout across app processes. It does not make raw text canonical
-storage and does not persist syntax-invalid JSON.
+storage and does not persist syntax-invalid JSON. `OPENJSON_WS_RATE_LIMIT_*`
+can enable a per-connection fixed-window WebSocket message limit. Limited
+connections receive a structured `RATE_LIMITED` error payload and then close.
 
 Offline sync accepts a batch of queued client content-save operations:
 

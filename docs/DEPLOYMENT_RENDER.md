@@ -77,6 +77,9 @@ OPENJSON_ALLOW_ACTOR_HEADER=0
 OPENJSON_RATE_LIMIT_ENABLED=1
 OPENJSON_RATE_LIMIT_REQUESTS=120
 OPENJSON_RATE_LIMIT_WINDOW_SECONDS=60
+OPENJSON_WS_RATE_LIMIT_ENABLED=1
+OPENJSON_WS_RATE_LIMIT_MESSAGES=120
+OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
 `OPENJSON_ALLOW_ACTOR_HEADER=0` disables the development-only actor id fallback
@@ -89,6 +92,8 @@ single-instance deployment. Limited responses return `RATE_LIMITED` with HTTP
 429 and `Retry-After`. `/health` and `/ready` are exempt so Render health
 checks keep working. This is not a replacement for Cloudflare abuse controls;
 keep Cloudflare proxied on the public domain before broader sharing.
+WebSocket collaboration also has a separate per-connection message limit.
+Limited sockets receive a structured `RATE_LIMITED` payload and close.
 
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
@@ -160,7 +165,8 @@ persistent database before treating the deploy as live.
 `/version` should show the deployed Git commit from Render's
 `RENDER_GIT_COMMIT` default environment variable and
 `runtime_config.actor_header_allowed=false`. It should also show
-`runtime_config.rate_limit_enabled=true`.
+`runtime_config.rate_limit_enabled=true` and
+`runtime_config.websocket_rate_limit_enabled=true`.
 
 You can run the deployment status smoke from this repo:
 
@@ -190,6 +196,8 @@ Then create an account from the UI and run a small document flow:
 - HTTP rate limiting is per-process fixed-window state. It is sufficient for
   the initial single-instance Render service, but Cloudflare and/or Redis
   should enforce distributed limits before scaling.
+- WebSocket message limiting is per-connection and in-process. It does not
+  replace distributed connection limits or Cloudflare abuse controls.
 - OIDC SSO is disabled until provider environment variables are configured.
 - Redis fanout is not provisioned in this baseline deployment.
 - PostgreSQL migration is required before serious production scale.

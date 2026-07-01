@@ -112,6 +112,19 @@ def rate_limit_config_from_env(
     )
 
 
+def websocket_rate_limit_config_from_env(
+    *,
+    enabled_raw: str | None,
+    messages_raw: str | None,
+    window_seconds_raw: str | None,
+) -> RateLimitConfig:
+    return RateLimitConfig(
+        enabled=_env_flag(enabled_raw),
+        requests=_positive_int(messages_raw, default=120),
+        window_seconds=_positive_int(window_seconds_raw, default=60),
+    )
+
+
 def _env_flag(raw: str | None) -> bool:
     return bool(raw and raw.strip().lower() in {"1", "true", "yes", "on"})
 

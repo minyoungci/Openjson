@@ -76,7 +76,12 @@ from app.integrity_service import (
 )
 from app.observability import configure_request_observability
 from app.offline_sync_service import apply_offline_sync_batch
-from app.rate_limit import configure_rate_limiting, rate_limit_config_from_env
+from app.rate_limit import (
+    FixedWindowRateLimiter,
+    configure_rate_limiting,
+    rate_limit_config_from_env,
+    websocket_rate_limit_config_from_env,
+)
 from app.realtime_service import collaboration_hub, invalid_realtime_message, websocket_error_payload
 from app.review_service import (
     apply_review_request,
@@ -187,6 +192,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
         requests_raw=os.environ.get("OPENJSON_RATE_LIMIT_REQUESTS"),
         window_seconds_raw=os.environ.get("OPENJSON_RATE_LIMIT_WINDOW_SECONDS"),
     )
+    application.state.websocket_rate_limit_config = websocket_rate_limit_config_from_env(
+        enabled_raw=os.environ.get("OPENJSON_WS_RATE_LIMIT_ENABLED"),
+        messages_raw=os.environ.get("OPENJSON_WS_RATE_LIMIT_MESSAGES"),
+        window_seconds_raw=os.environ.get("OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS"),
+    )
     configure_rate_limiting(application, config=rate_limit_config)
     configure_request_observability(
         application,
@@ -249,6 +259,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
             allow_actor_header=application.state.allow_actor_header,
             cors_origins_configured=application.state.cors_origins_configured,
             rate_limit_config=application.state.rate_limit_config,
+            websocket_rate_limit_config=application.state.websocket_rate_limit_config,
         )
 
     @application.get("/ready")
@@ -899,10 +910,37 @@ def create_app(db_path: str | None = None) -> FastAPI:
                     "state": state,
                 }
             )
+            websocket_rate_limit_config = application.state.websocket_rate_limit_config
+            websocket_rate_limiter = (
+                FixedWindowRateLimiter(
+                    limit=websocket_rate_limit_config.requests,
+                    window_seconds=websocket_rate_limit_config.window_seconds,
+                )
+                if websocket_rate_limit_config.enabled
+                else None
+            )
 
             while True:
                 try:
                     message = await websocket.receive_json()
+                    if websocket_rate_limiter is not None:
+                        rate_result = websocket_rate_limiter.check("messages")
+                        if not rate_result["allowed"]:
+                            await websocket.send_json(
+                                websocket_error_payload(
+                                    AppError(
+                                        ErrorCode.RATE_LIMITED,
+                                        "Too many WebSocket messages. Please retry after the rate limit window resets.",
+                                        {
+                                            "limit": rate_result["limit"],
+                                            "window_seconds": websocket_rate_limit_config.window_seconds,
+                                            "retry_after_seconds": rate_result["reset_seconds"],
+                                        },
+                                    )
+                                )
+                            )
+                            await websocket.close(code=1008)
+                            return
                     if not isinstance(message, dict):
                         await websocket.send_json(
                             invalid_realtime_message(

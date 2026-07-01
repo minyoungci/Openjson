@@ -47,6 +47,7 @@ def version_status(
     allow_actor_header: bool,
     cors_origins_configured: bool,
     rate_limit_config: RateLimitConfig,
+    websocket_rate_limit_config: RateLimitConfig,
 ) -> dict[str, Any]:
     return {
         "service": "openjson-api",
@@ -68,6 +69,9 @@ def version_status(
             "rate_limit_enabled": rate_limit_config.enabled,
             "rate_limit_requests": rate_limit_config.requests,
             "rate_limit_window_seconds": rate_limit_config.window_seconds,
+            "websocket_rate_limit_enabled": websocket_rate_limit_config.enabled,
+            "websocket_rate_limit_messages": websocket_rate_limit_config.requests,
+            "websocket_rate_limit_window_seconds": websocket_rate_limit_config.window_seconds,
             "redis_fanout_enabled": bool(_optional_env("OPENJSON_REDIS_URL")),
             "oidc_configured": all(
                 _optional_env(name)

@@ -114,7 +114,7 @@ Bearer-token document patch preview scope is pinned in
 - No refresh token flow.
 - No token expiry yet.
 - TASK_116 adds a simple in-process HTTP rate limit for the single-instance
-  deployment. Distributed limits, WebSocket message limits, and plan-based
-  quotas remain future work.
+  deployment. TASK_117 adds a per-connection WebSocket message limit.
+  Distributed limits and plan-based quotas remain future work.
 - No admin-wide token management yet.
 - No token rotation endpoint yet.

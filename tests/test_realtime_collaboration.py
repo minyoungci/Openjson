@@ -4,6 +4,8 @@ import tempfile
 import unittest
 import asyncio
 import hashlib
+import os
+from unittest.mock import patch
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,7 @@ class FakeWebSocket:
 
 class RealtimeCollaborationTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._clear_websocket_rate_limit_env()
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = str(Path(self.tmp.name) / "test.sqlite3")
         init_db(self.db_path)
@@ -73,6 +76,12 @@ class RealtimeCollaborationTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
+        self._clear_websocket_rate_limit_env()
+
+    def _clear_websocket_rate_limit_env(self) -> None:
+        os.environ.pop("OPENJSON_WS_RATE_LIMIT_ENABLED", None)
+        os.environ.pop("OPENJSON_WS_RATE_LIMIT_MESSAGES", None)
+        os.environ.pop("OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS", None)
 
     def _ws_path(self, actor_id: str | None = None) -> str:
         path = f"/ws/documents/{self.document['id']}/collaboration"
@@ -206,6 +215,32 @@ class RealtimeCollaborationTests(unittest.TestCase):
 
         self.assertEqual(message["type"], "collaboration_state")
         self.assertEqual(message["state"]["actor_id"], self.owner_id)
+
+    def test_websocket_message_rate_limit_sends_error_and_closes(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENJSON_WS_RATE_LIMIT_ENABLED": "1",
+                "OPENJSON_WS_RATE_LIMIT_MESSAGES": "2",
+                "OPENJSON_WS_RATE_LIMIT_WINDOW_SECONDS": "60",
+            },
+            clear=False,
+        ):
+            client = TestClient(create_app(self.db_path))
+            with client.websocket_connect(self._ws_path(self.owner_id)) as websocket:
+                websocket.receive_json()
+                websocket.send_json({"type": "ping"})
+                self.assertEqual(websocket.receive_json()["type"], "pong")
+                websocket.send_json({"type": "ping"})
+                self.assertEqual(websocket.receive_json()["type"], "pong")
+                websocket.send_json({"type": "ping"})
+                limited = websocket.receive_json()
+                self.assertEqual(limited["type"], "error")
+                self.assertEqual(limited["error"]["code"], "RATE_LIMITED")
+                self.assertEqual(limited["error"]["details"]["limit"], 2)
+                self.assertEqual(limited["error"]["details"]["window_seconds"], 60)
+                with self.assertRaises(WebSocketDisconnect):
+                    websocket.receive_json()
 
 
 if __name__ == "__main__":

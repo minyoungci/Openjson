@@ -309,6 +309,10 @@ accepted insert/delete/replace operations only as operational WebSocket state.
 update pipeline; only the resulting `document_events` update row is durable
 document history.
 
+TASK_117 WebSocket message limiting adds no table. It is in-memory
+per-connection operational state and does not mutate `editor_presence`,
+`document_events`, snapshots, audit rows, or text collaboration sessions.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
