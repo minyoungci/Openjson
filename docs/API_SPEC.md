@@ -201,6 +201,8 @@ See `docs/TASK_150_PLAN.md` for guarding stale WebSocket disconnect leave
 against newer presence heartbeats.
 See `docs/TASK_151_PLAN.md` for ignoring stale browser collaboration-state
 payloads after document switches.
+See `docs/TASK_152_PLAN.md` for guarding stale live-text WebSocket payloads
+after socket replacement or document switches.
 
 ## Deployment Version
 
@@ -559,6 +561,10 @@ operations use the acknowledged `base_text_revision`.
 Every `text_session.op.accepted` payload includes the active session
 `content_text` so browser clients can realign their shadow text with the server
 session after transformed operations or idempotent replays.
+The static browser client processes live-text WebSocket payloads only from the
+currently active document socket and applies `text_session.state` or
+`text_session.committed` only when the payload `document_id` still matches the
+selected document.
 When a remote accepted operation arrives while the static browser client has
 unsent or unacknowledged local text, the browser preserves the visible local
 editor buffer, realigns its live-text shadow to the server session, and sends a

@@ -1827,6 +1827,9 @@
     state.projectSocketProjectId = projectId;
 
     socket.addEventListener("message", (event) => {
+      if (state.collaborationSocket !== socket) {
+        return;
+      }
       let payload;
       try {
         payload = JSON.parse(event.data);
@@ -1907,8 +1910,11 @@
       } else if (payload.type === "text_session.op.accepted") {
         applyAcceptedLiveTextOperation(payload);
       } else if (payload.type === "text_session.committed") {
+        if (payload.document_id !== state.selectedDocumentId) {
+          return;
+        }
         setEditorStatus(`Live text committed as version ${payload.result_version}.`, "ok");
-        loadBootstrap(state.selectedDocumentId).catch((error) => showGlobalError(error));
+        loadBootstrap(payload.document_id).catch((error) => showGlobalError(error));
       }
     });
 
@@ -1928,6 +1934,9 @@
     });
 
     socket.addEventListener("error", () => {
+      if (state.collaborationSocket !== socket) {
+        return;
+      }
       state.collaborationTransport = "polling";
       markLiveTextOperationUnacknowledged();
     });
@@ -1982,6 +1991,9 @@
   }
 
   function applyLiveTextState(payload) {
+    if (payload.document_id !== state.selectedDocumentId) {
+      return;
+    }
     const sessionText = payload.content_text || "";
     const wasReset = payload.session_reset === true;
     const hasLocalLiveTextBuffer =

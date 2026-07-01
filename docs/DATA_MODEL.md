@@ -505,6 +505,13 @@ static browser client ignores `collaboration_state` payloads whose
 operational state only and does not affect `editor_presence`, canonical
 snapshots, or append-only `document_events`.
 
+TASK_152 stale live-text payload handling also adds no table. The static
+browser client ignores document WebSocket callbacks from sockets that are no
+longer active and ignores live-text state or commit payloads whose
+`document_id` no longer matches the selected document. This protects browser
+transient editor state without changing canonical snapshots, append-only
+`document_events`, or in-process server text sessions.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
