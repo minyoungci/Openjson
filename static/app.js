@@ -496,6 +496,7 @@
       showAuthScreen(invitePromptText());
       return;
     }
+    invalidateBootstrapRequests();
     stopCollaborationLoop();
     stopProjectWorkspaceSocket();
     state.loading = true;
@@ -749,8 +750,7 @@
     state.refreshToken = "";
     state.projectId = "";
     state.selectedDocumentId = "";
-    state.bootstrapRequestId += 1;
-    state.loading = false;
+    invalidateBootstrapRequests();
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
@@ -872,6 +872,11 @@
 
   function isCurrentBootstrapRequest(requestId, projectId) {
     return state.bootstrapRequestId === requestId && state.projectId === projectId;
+  }
+
+  function invalidateBootstrapRequests() {
+    state.bootstrapRequestId += 1;
+    state.loading = false;
   }
 
   function finishStaleBootstrapRequest(requestId) {

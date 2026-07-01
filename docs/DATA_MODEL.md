@@ -533,6 +533,13 @@ latest request and active project id. This protects browser UI state without
 changing canonical snapshots, append-only `document_events`, project
 membership, comments, schemas, or WebSocket state.
 
+TASK_156 project-home bootstrap invalidation also adds no table. The static
+browser client invalidates outstanding project editor-bootstrap loads when the
+user returns to the project selection screen, so late browser responses cannot
+re-open an old editor view. This is client-only state and does not affect
+canonical snapshots, append-only `document_events`, workspaces, projects,
+schemas, comments, reviews, or WebSocket server state.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

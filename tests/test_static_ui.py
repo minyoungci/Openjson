@@ -230,8 +230,15 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("if (!isCurrentBootstrapRequest(requestId, projectId))", bootstrap_loader)
         self.assertIn("finishStaleBootstrapRequest(requestId)", bootstrap_loader)
         self.assertIn("function isCurrentBootstrapRequest(requestId, projectId)", js.text)
+        self.assertIn("function invalidateBootstrapRequests()", js.text)
         self.assertIn("function finishStaleBootstrapRequest(requestId)", js.text)
         self.assertIn("state.bootstrapRequestId += 1", js.text)
+        project_home_loader = js.text.split("async function loadProjectHome()", 1)[1].split(
+            "async function createProjectFromGate", 1
+        )[0]
+        self.assertIn("invalidateBootstrapRequests()", project_home_loader)
+        self.assertIn("stopCollaborationLoop()", project_home_loader)
+        self.assertIn("stopProjectWorkspaceSocket()", project_home_loader)
         self.assertIn("result.document_id !== state.selectedDocumentId", js.text)
         self.assertIn("createCommentThread", js.text)
         self.assertIn("addCommentReply", js.text)

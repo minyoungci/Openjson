@@ -210,6 +210,8 @@ See `docs/TASK_154_PLAN.md` for guarding stale browser document collaboration
 WebSocket messages after socket replacement or document switches.
 See `docs/TASK_155_PLAN.md` for guarding stale browser project bootstrap
 responses after project switches, logout, or refresh races.
+See `docs/TASK_156_PLAN.md` for invalidating stale browser bootstrap loads
+when returning to the project selection screen.
 
 ## Deployment Version
 
@@ -648,6 +650,9 @@ The static browser client also applies project editor-bootstrap responses only
 when the response belongs to the latest browser bootstrap request and the same
 active project id, so delayed HTTP responses cannot overwrite the current
 project/document UI after navigation or logout.
+Returning to the project selection screen invalidates outstanding browser
+editor-bootstrap requests before workspace/project lists are loaded, so late
+bootstrap responses cannot re-open the editor after intentional navigation.
 
 Offline sync accepts a batch of queued client content-save operations:
 
