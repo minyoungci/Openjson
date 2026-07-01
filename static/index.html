@@ -95,39 +95,41 @@
             <h1>Projects</h1>
             <p id="projectHomeLabel">Create a project or open one you already belong to.</p>
           </div>
-          <button id="projectLogoutButton" class="secondary-button" type="button">Logout</button>
+          <div class="project-mode-actions">
+            <button id="showCreateProjectButton" class="primary-button" type="button">New Project</button>
+            <button id="projectLogoutButton" class="secondary-button" type="button">Logout</button>
+          </div>
         </div>
 
-        <div class="project-entry-grid">
-          <section class="entry-subsection">
-            <div class="panel-heading">
-              <h2>Create Project</h2>
-            </div>
-            <label class="stacked-label">
-              Workspace name
-              <input id="workspaceNameInput" autocomplete="organization" placeholder="Team Workspace" />
-            </label>
-            <label class="stacked-label">
-              Project name
-              <input id="projectNameInput" autocomplete="off" placeholder="Model Configs" />
-            </label>
-            <label class="stacked-label">
-              Description
-              <textarea id="projectDescriptionInput" rows="3" placeholder="Shared JSON files for this team"></textarea>
-            </label>
-            <button id="createProjectButton" class="primary-button full-width" type="button">Create Project</button>
-          </section>
+        <section id="projectListPanel" class="entry-subsection project-list-panel">
+          <div class="panel-heading">
+            <h2>Your Projects</h2>
+            <button id="refreshProjectsButton" class="icon-button" type="button" title="Refresh projects" aria-label="Refresh projects">
+              <svg><use href="#icon-refresh"></use></svg>
+            </button>
+          </div>
+          <div id="projectList" class="project-list" aria-live="polite"></div>
+        </section>
 
-          <section class="entry-subsection">
-            <div class="panel-heading">
-              <h2>Your Projects</h2>
-              <button id="refreshProjectsButton" class="icon-button" type="button" title="Refresh projects" aria-label="Refresh projects">
-                <svg><use href="#icon-refresh"></use></svg>
-              </button>
-            </div>
-            <div id="projectList" class="project-list" aria-live="polite"></div>
-          </section>
-        </div>
+        <section id="projectCreatePanel" class="entry-subsection project-create-panel hidden">
+          <div class="panel-heading">
+            <h2>Create Project</h2>
+            <button id="cancelProjectCreateButton" class="secondary-button" type="button">Projects</button>
+          </div>
+          <label class="stacked-label">
+            Workspace name
+            <input id="workspaceNameInput" autocomplete="organization" placeholder="Team Workspace" />
+          </label>
+          <label class="stacked-label">
+            Project name
+            <input id="projectNameInput" autocomplete="off" placeholder="Model Configs" />
+          </label>
+          <label class="stacked-label">
+            Description
+            <textarea id="projectDescriptionInput" rows="3" placeholder="Shared JSON files for this team"></textarea>
+          </label>
+          <button id="createProjectButton" class="primary-button full-width" type="button">Create Project</button>
+        </section>
 
         <section class="entry-subsection invite-entry">
           <div class="panel-heading">
@@ -155,12 +157,6 @@
             <p id="projectLabel">Workspace editor</p>
           </div>
         </div>
-        <form id="connectionForm" class="hidden" aria-hidden="true">
-          <input id="actorIdInput" name="actorId" type="hidden" />
-          <input id="projectIdInput" name="projectId" type="hidden" />
-          <input id="tokenInput" name="token" type="hidden" />
-          <button type="submit">Load</button>
-        </form>
         <div class="top-actions">
           <span id="sessionBadge" class="session-badge"></span>
           <button id="projectSwitcherButton" class="secondary-button" type="button">Projects</button>

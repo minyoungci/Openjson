@@ -116,10 +116,16 @@ button:disabled {
   font-size: 13px;
 }
 
-.project-entry-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(300px, 1.1fr);
-  gap: 18px;
+.project-mode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.project-list-panel,
+.project-create-panel {
+  min-height: 230px;
 }
 
 .project-list {
@@ -770,13 +776,16 @@ textarea:focus {
     padding: 12px;
   }
 
-  .project-entry-grid,
   .invite-row {
     grid-template-columns: 1fr;
   }
 
   .entry-heading {
     display: grid;
+  }
+
+  .project-mode-actions {
+    justify-content: flex-start;
   }
 
   .topbar,

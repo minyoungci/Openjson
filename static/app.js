@@ -8,10 +8,6 @@
     authScreen: $("authScreen"),
     projectScreen: $("projectScreen"),
     workspaceShell: $("workspaceShell"),
-    actorId: $("actorIdInput"),
-    projectId: $("projectIdInput"),
-    token: $("tokenInput"),
-    connectionForm: $("connectionForm"),
     copyLinkButton: $("copyLinkButton"),
     projectSwitcherButton: $("projectSwitcherButton"),
     projectLogoutButton: $("projectLogoutButton"),
@@ -27,6 +23,10 @@
     workspaceName: $("workspaceNameInput"),
     projectName: $("projectNameInput"),
     projectDescription: $("projectDescriptionInput"),
+    showCreateProjectButton: $("showCreateProjectButton"),
+    cancelProjectCreateButton: $("cancelProjectCreateButton"),
+    projectListPanel: $("projectListPanel"),
+    projectCreatePanel: $("projectCreatePanel"),
     createProjectButton: $("createProjectButton"),
     refreshProjectsButton: $("refreshProjectsButton"),
     projectList: $("projectList"),
@@ -105,7 +105,7 @@
   };
 
   const state = {
-    actorId: localStorage.getItem("openjson.actorId") || "",
+    userId: localStorage.getItem("openjson.userId") || "",
     projectId: initialParams.get("project_id") || localStorage.getItem("openjson.projectId") || "",
     token: localStorage.getItem("openjson.token") || "",
     refreshToken: localStorage.getItem("openjson.refreshToken") || "",
@@ -164,9 +164,6 @@
   }
 
   function init() {
-    els.actorId.value = state.actorId;
-    els.projectId.value = state.projectId;
-    els.token.value = state.token;
     els.authName.value = state.userDisplayName;
     els.authEmail.value = state.userEmail;
     els.autosaveToggle.checked = state.autosaveEnabled;
@@ -189,17 +186,6 @@
   }
 
   function bindEvents() {
-    els.connectionForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      state.actorId = els.actorId.value.trim();
-      state.projectId = els.projectId.value.trim();
-      state.token = els.token.value.trim();
-      localStorage.setItem("openjson.actorId", state.actorId);
-      localStorage.setItem("openjson.projectId", state.projectId);
-      localStorage.setItem("openjson.token", state.token);
-      loadBootstrap(state.selectedDocumentId || null).catch((error) => showGlobalError(error));
-    });
-
     els.copyLinkButton.addEventListener("click", () => {
       copyShareLink().catch((error) => renderError(els.validationPanel, error));
     });
@@ -214,6 +200,14 @@
 
     els.createProjectButton.addEventListener("click", () => {
       createProjectFromGate().catch((error) => renderError(els.projectSetupOutput, error));
+    });
+
+    els.showCreateProjectButton.addEventListener("click", () => {
+      showProjectCreateMode();
+    });
+
+    els.cancelProjectCreateButton.addEventListener("click", () => {
+      showProjectListMode();
     });
 
     els.projectList.addEventListener("click", (event) => {
@@ -474,7 +468,6 @@
       } catch (error) {
         state.projectId = "";
         state.selectedDocumentId = "";
-        els.projectId.value = "";
         localStorage.removeItem("openjson.projectId");
         localStorage.removeItem("openjson.selectedDocumentId");
         renderError(els.projectSetupOutput, error);
@@ -529,6 +522,7 @@
       return;
     }
     state.loading = true;
+    showProjectCreateMode();
     syncButtons();
     try {
       const workspace = await apiFetch("/workspaces", {
@@ -560,7 +554,6 @@
 
   function setProjectId(projectId) {
     state.projectId = projectId;
-    els.projectId.value = projectId;
     localStorage.setItem("openjson.projectId", projectId);
     clearInviteResult();
   }
@@ -586,6 +579,21 @@
     syncAccountLabels();
   }
 
+  function showProjectListMode() {
+    els.projectListPanel.classList.remove("hidden");
+    els.projectCreatePanel.classList.add("hidden");
+    els.showCreateProjectButton.classList.remove("hidden");
+    syncButtons();
+  }
+
+  function showProjectCreateMode() {
+    els.projectListPanel.classList.add("hidden");
+    els.projectCreatePanel.classList.remove("hidden");
+    els.showCreateProjectButton.classList.add("hidden");
+    clearPanel(els.projectSetupOutput, "Create a workspace and project for your JSON files.");
+    syncButtons();
+  }
+
   function showWorkspaceScreen() {
     els.authScreen.classList.add("hidden");
     els.projectScreen.classList.add("hidden");
@@ -601,6 +609,7 @@
   }
 
   function renderProjectHome() {
+    showProjectListMode();
     clear(els.projectList);
     if (!state.availableProjects.length) {
       renderText(els.projectList, "No projects yet.", "muted");
@@ -624,11 +633,12 @@
       els.projectList.appendChild(row);
     }
     if (state.projectHomeErrors.length) {
+      clear(els.projectSetupOutput);
       renderText(els.projectSetupOutput, "Some project lists could not be loaded.", "error-text");
     } else if (state.availableProjects.length) {
-      renderText(els.projectSetupOutput, "Select a project or create a new one.", "muted");
+      clearPanel(els.projectSetupOutput, "Select a project or create a new one.");
     } else {
-      renderText(els.projectSetupOutput, "Create your first project to start editing JSON.", "muted");
+      clearPanel(els.projectSetupOutput, "Create your first project to start editing JSON.");
     }
   }
 
@@ -693,15 +703,13 @@
   }
 
   function applyAuthenticatedSession(result) {
-    state.actorId = result.user.id;
+    state.userId = result.user.id;
     state.token = result.token;
     state.userDisplayName = result.user.display_name || "";
     state.userEmail = result.user.email || "";
-    els.actorId.value = state.actorId;
-    els.token.value = state.token;
     els.authName.value = state.userDisplayName;
     els.authEmail.value = state.userEmail;
-    localStorage.setItem("openjson.actorId", state.actorId);
+    localStorage.setItem("openjson.userId", state.userId);
     localStorage.setItem("openjson.token", state.token);
     localStorage.setItem("openjson.userDisplayName", state.userDisplayName);
     localStorage.setItem("openjson.userEmail", state.userEmail);
@@ -718,7 +726,7 @@
   function clearSessionState(options) {
     const preserveInvite = Boolean(options && options.preserveInvite);
     const inviteToken = preserveInvite ? state.pendingInviteToken || els.projectInviteToken.value.trim() : "";
-    state.actorId = "";
+    state.userId = "";
     state.token = "";
     state.refreshToken = "";
     state.projectId = "";
@@ -728,9 +736,6 @@
     state.projectMembers = [];
     state.projectSchemas = [];
     state.availableProjects = [];
-    els.token.value = "";
-    els.actorId.value = "";
-    els.projectId.value = "";
     if (preserveInvite && inviteToken) {
       state.pendingInviteToken = inviteToken;
       els.projectInviteToken.value = inviteToken;
@@ -741,7 +746,7 @@
     }
     localStorage.removeItem("openjson.token");
     localStorage.removeItem("openjson.refreshToken");
-    localStorage.removeItem("openjson.actorId");
+    localStorage.removeItem("openjson.userId");
     localStorage.removeItem("openjson.projectId");
     localStorage.removeItem("openjson.selectedDocumentId");
   }
@@ -1027,7 +1032,7 @@
       details.append(name, meta);
       const badge = document.createElement("span");
       badge.className = "member-badge";
-      badge.textContent = member.user_id === state.actorId ? "You" : member.role;
+      badge.textContent = member.user_id === state.userId ? "You" : member.role;
       row.append(details, badge);
       els.teamMembersOutput.appendChild(row);
     }
@@ -1673,21 +1678,14 @@
   }
 
   function openCollaborationSocket() {
-    if (!state.selectedDocumentId || (!state.actorId && !state.token) || !("WebSocket" in window)) {
+    if (!state.selectedDocumentId || !state.token || !("WebSocket" in window)) {
       state.collaborationTransport = "polling";
       return;
     }
     const documentId = state.selectedDocumentId;
     const url = new URL(`/ws/documents/${encodeURIComponent(documentId)}/collaboration`, window.location.origin);
     url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    if (state.token) {
-      url.searchParams.set("token", state.token);
-      if (state.actorId) {
-        url.searchParams.set("actor_id", state.actorId);
-      }
-    } else {
-      url.searchParams.set("actor_id", state.actorId);
-    }
+    url.searchParams.set("token", state.token);
     const socket = new WebSocket(url.toString());
     state.collaborationSocket = socket;
     state.collaborationTransport = "connecting";
@@ -1871,14 +1869,12 @@
   }
 
   function sendPresenceLeave() {
-    if (!state.selectedDocumentId) {
+    if (!state.selectedDocumentId || !state.token) {
       return;
     }
     const headers = { Accept: "application/json" };
     if (state.token) {
       headers.Authorization = `Bearer ${state.token}`;
-    } else if (state.actorId) {
-      headers["X-Actor-Id"] = state.actorId;
     }
     fetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/presence`, {
       method: "DELETE",
@@ -1966,6 +1962,8 @@
     els.logoutButton.disabled = busy || !state.token;
     els.projectLogoutButton.disabled = busy || !state.token;
     els.refreshProjectsButton.disabled = busy || !state.token;
+    els.showCreateProjectButton.disabled = busy || !state.token;
+    els.cancelProjectCreateButton.disabled = busy || !state.token;
     els.createProjectButton.disabled = busy || !state.token;
     els.reloadButton.disabled = busy;
     els.zipSelectButton.disabled = busy;
@@ -2441,8 +2439,6 @@
     const headers = { Accept: "application/json" };
     if (includeAuth && state.token) {
       headers.Authorization = `Bearer ${state.token}`;
-    } else if (includeAuth && state.actorId) {
-      headers["X-Actor-Id"] = state.actorId;
     }
     const init = { method, headers };
     if (options && Object.prototype.hasOwnProperty.call(options, "body")) {
@@ -2545,8 +2541,6 @@
     };
     if (state.token) {
       headers.Authorization = `Bearer ${state.token}`;
-    } else if (state.actorId) {
-      headers["X-Actor-Id"] = state.actorId;
     }
     const response = await fetch(url, { method, headers, body: options ? options.body : undefined });
     const text = await response.text();

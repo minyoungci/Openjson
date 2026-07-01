@@ -5,11 +5,14 @@
 OpenJson now uses a user-facing entry flow:
 
 1. Sign up or log in with name, email, and password.
-2. Create a workspace/project or open an existing project.
+2. Open an existing project, join an invited project, or use the dedicated
+   project creation screen to create a workspace/project.
 3. Upload or create JSON documents inside that selected project.
 
-The app still keeps `actor_id`, `project_id`, and session tokens internally, but
-normal users no longer need to paste those values into the top bar.
+The app keeps the selected `project_id`, the authenticated user id, and session
+tokens as browser state. Normal users do not paste actor ids, project ids, or
+tokens into the top bar, and the static browser app authenticates API calls with
+the session bearer token.
 
 Project owners/admins can invite teammates by email from the Team panel. If the
 deployment is configured with SMTP, OpenJson sends the invitation email

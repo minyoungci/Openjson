@@ -91,11 +91,13 @@ All API errors use:
 - `GET /static/styles.css`
 - `GET /static/app.js`
 
-The local UI calls the existing REST APIs with `X-Actor-Id`, a local session
-bearer token, or a project-scoped API bearer token and does not introduce a
-separate frontend persistence model. TASK_102 adds local user/member controls
-and a WebSocket presence/checkpoint channel, but the editor still saves through
-the versioned HTTP content API.
+The static browser UI calls the existing REST APIs with local session bearer
+tokens and does not introduce a separate frontend persistence model.
+`X-Actor-Id` remains available for local API development and legacy smoke
+commands, but the official browser app no longer sends it as an identity
+fallback. TASK_102 adds local user/member controls and a WebSocket
+presence/checkpoint channel, but the editor still saves through the versioned
+HTTP content API.
 
 See `docs/TASK_096_PLAN.md`.
 See `docs/TASK_097_PLAN.md` for shareable URL, browser-local JSON import, and
@@ -121,6 +123,8 @@ See `docs/TASK_110_PLAN.md` for the local Notes panel over existing comment
 thread APIs.
 See `docs/TASK_111_PLAN.md` for the team workspace smoke covering signup,
 invite, edit checkpoint, notes, diff, and replay.
+See `docs/TASK_112_PLAN.md` for the production entry UX cleanup that removes
+developer identity fallback from the static browser app.
 
 ## Bootstrap, Workspace, Project
 
