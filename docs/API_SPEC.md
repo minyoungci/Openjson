@@ -167,6 +167,8 @@ See `docs/TASK_132_PLAN.md` for idempotent WebSocket collaborative text
 operations.
 See `docs/TASK_133_PLAN.md` for browser live-text pending-operation ack
 ordering.
+See `docs/TASK_134_PLAN.md` for authoritative accepted text-session payload
+resynchronization.
 
 ## Deployment Version
 
@@ -496,6 +498,9 @@ The static browser client keeps at most one unacknowledged local
 `text_session.op` in flight. Additional local keystrokes remain in the editor
 buffer and are diffed again after the server acknowledgement, so later
 operations use the acknowledged `base_text_revision`.
+Every `text_session.op.accepted` payload includes the active session
+`content_text` so browser clients can realign their shadow text with the server
+session after transformed operations or idempotent replays.
 
 Offline sync accepts a batch of queued client content-save operations:
 

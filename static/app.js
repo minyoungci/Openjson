@@ -1841,13 +1841,17 @@
       return;
     }
     state.liveTextRevision = Math.max(state.liveTextRevision, payload.server_text_revision || 0);
+    const authoritativeText = typeof payload.content_text === "string" ? payload.content_text : null;
     if (payload.idempotent_replay || payload.client_id === state.liveTextClientId) {
+      if (authoritativeText !== null) {
+        state.liveTextShadow = authoritativeText;
+      }
       finishLocalLiveTextOperation();
       return;
     }
-    state.liveTextShadow = applyTextOperation(state.liveTextShadow, payload.op);
+    state.liveTextShadow = authoritativeText !== null ? authoritativeText : applyTextOperation(state.liveTextShadow, payload.op);
     state.liveTextApplyingRemote = true;
-    els.editorBuffer.value = applyTextOperation(els.editorBuffer.value, payload.op);
+    els.editorBuffer.value = authoritativeText !== null ? authoritativeText : applyTextOperation(els.editorBuffer.value, payload.op);
     state.liveTextApplyingRemote = false;
     updateSyntaxState();
   }

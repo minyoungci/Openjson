@@ -163,6 +163,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("client_operation_id", js.text)
         self.assertIn("newClientOperationId", js.text)
         self.assertIn("idempotent_replay", js.text)
+        self.assertIn("authoritativeText", js.text)
         self.assertIn("liveTextPendingOperation", js.text)
         self.assertIn("finishLocalLiveTextOperation", js.text)
         self.assertIn("Live text change is still syncing.", js.text)

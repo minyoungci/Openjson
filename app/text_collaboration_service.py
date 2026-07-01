@@ -245,6 +245,7 @@ def _operation_payload(
         "client_id": accepted.client_id,
         "client_operation_id": accepted.client_operation_id,
         "op": accepted.op,
+        "content_text": session.text,
         "created_at": accepted.created_at,
         "idempotent_replay": idempotent_replay,
     }

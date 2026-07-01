@@ -389,6 +389,12 @@ for `text_session.op.accepted`, and then re-diffs the editor buffer before
 sending another operation. This is client-owned transient state and does not
 change canonical snapshots or append-only document events.
 
+TASK_134 accepted text-session payload resynchronization also adds no table.
+`text_session.op.accepted` includes the in-process session `content_text` so
+browser clients can realign transient shadow text after transformed operations
+or idempotent replays. This payload is not canonical storage; only a successful
+`text_session.commit` creates durable `document_events` history.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -226,6 +226,7 @@ class RealtimeCollaborationTests(unittest.TestCase):
             self.assertEqual(accepted["type"], "text_session.op.accepted")
             self.assertFalse(accepted["idempotent_replay"])
             self.assertEqual(accepted["server_text_revision"], 1)
+            self.assertIn('"name":"Xbaseline"', accepted["content_text"].replace(" ", ""))
 
             websocket.send_json(operation)
             replayed = websocket.receive_json()
@@ -233,6 +234,7 @@ class RealtimeCollaborationTests(unittest.TestCase):
             self.assertTrue(replayed["idempotent_replay"])
             self.assertEqual(replayed["server_text_revision"], accepted["server_text_revision"])
             self.assertEqual(replayed["client_operation_id"], "owner-op-1")
+            self.assertEqual(replayed["content_text"], accepted["content_text"])
 
             websocket.send_json({"type": "text_session.commit", "text_revision": replayed["server_text_revision"]})
             committed = websocket.receive_json()
