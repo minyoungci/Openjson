@@ -118,6 +118,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("renderZipImportResult", js.text)
         self.assertIn("apiFetchBinary", js.text)
         self.assertIn("renderCollaboration", js.text)
+        self.assertIn("renderInvitationResult", js.text)
+        self.assertIn("Invitation email sent", js.text)
         self.assertIn("renderTeamPanel", js.text)
         self.assertIn("openCollaborationSocket", js.text)
         self.assertIn("sendRealtimeMessage", js.text)

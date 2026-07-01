@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -83,6 +84,65 @@ class Task104CollaborationAuthSyncTests(unittest.TestCase):
         with connect(self.db_path) as conn:
             count = conn.execute("SELECT COUNT(*) AS count FROM email_deliveries").fetchone()["count"]
         self.assertEqual(count, 1)
+
+    def test_invitation_creation_sends_smtp_email_when_configured(self) -> None:
+        owner, _, project = self._project()
+        smtp_env = {
+            "OPENJSON_EMAIL_BACKEND": "smtp",
+            "OPENJSON_PUBLIC_BASE_URL": "https://openjson.example.test",
+            "OPENJSON_EMAIL_FROM": "no-reply@openjson.example.test",
+            "OPENJSON_SMTP_HOST": "smtp.example.test",
+            "OPENJSON_SMTP_PORT": "2525",
+            "OPENJSON_SMTP_USERNAME": "smtp-user",
+            "OPENJSON_SMTP_PASSWORD": "smtp-pass",
+            "OPENJSON_SMTP_TLS": "1",
+        }
+        with patch.dict(os.environ, smtp_env, clear=False), patch("app.email_service.smtplib.SMTP") as smtp_cls:
+            smtp = smtp_cls.return_value.__enter__.return_value
+            response = self.client.post(
+                f"/projects/{project['id']}/invitations",
+                headers={"Authorization": f"Bearer {owner['token']}"},
+                json={"email": "smtp-invitee@example.com", "role": "viewer"},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        delivery = response.json()["email_delivery"]
+        self.assertEqual(delivery["status"], "sent")
+        self.assertEqual(delivery["delivery_backend"], "smtp")
+        self.assertIsNone(delivery["accept_url"])
+        smtp_cls.assert_called_once_with("smtp.example.test", 2525, timeout=10)
+        smtp.starttls.assert_called_once()
+        smtp.login.assert_called_once_with("smtp-user", "smtp-pass")
+        self.assertEqual(smtp.send_message.call_count, 1)
+        message = smtp.send_message.call_args.args[0]
+        self.assertEqual(message["To"], "smtp-invitee@example.com")
+        self.assertEqual(message["From"], "no-reply@openjson.example.test")
+        self.assertIn(response.json()["token"], message.get_content())
+        self.assertIn("https://openjson.example.test/app?invite_token=", message.get_content())
+
+    def test_invitation_creation_records_smtp_failure_without_rolling_back_invite(self) -> None:
+        owner, _, project = self._project()
+        smtp_env = {
+            "OPENJSON_EMAIL_BACKEND": "smtp",
+            "OPENJSON_PUBLIC_BASE_URL": "https://openjson.example.test",
+        }
+        with patch.dict(os.environ, smtp_env, clear=False):
+            response = self.client.post(
+                f"/projects/{project['id']}/invitations",
+                headers={"Authorization": f"Bearer {owner['token']}"},
+                json={"email": "missing-smtp@example.com", "role": "editor"},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertTrue(body["token"].startswith("oji_"))
+        self.assertEqual(body["email_delivery"]["status"], "failed")
+        self.assertIn("OPENJSON_SMTP_HOST is required", body["email_delivery"]["error_message"])
+        with connect(self.db_path) as conn:
+            invitation_count = conn.execute("SELECT COUNT(*) AS count FROM project_invitations").fetchone()["count"]
+            delivery_count = conn.execute("SELECT COUNT(*) AS count FROM email_deliveries").fetchone()["count"]
+        self.assertEqual(invitation_count, 1)
+        self.assertEqual(delivery_count, 1)
 
     def test_offline_sync_applies_idempotently_and_reports_conflict(self) -> None:
         owner, _, project = self._project()

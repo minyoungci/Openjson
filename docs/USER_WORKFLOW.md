@@ -11,6 +11,10 @@ OpenJson now uses a user-facing entry flow:
 The app still keeps `actor_id`, `project_id`, and session tokens internally, but
 normal users no longer need to paste those values into the top bar.
 
+Project owners/admins can invite teammates by email from the Team panel. If the
+deployment is configured with SMTP, OpenJson sends the invitation email
+immediately. The generated invite token remains visible as a fallback join path.
+
 ## How Saving Works
 
 The editor does not persist raw text directly as the source of truth.

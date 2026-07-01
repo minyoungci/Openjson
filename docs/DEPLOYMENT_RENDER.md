@@ -86,6 +86,11 @@ OPENJSON_SMTP_PASSWORD=
 OPENJSON_SMTP_TLS=1
 ```
 
+After those values are configured in Render, run a manual deploy or restart the
+service. New project invitations will then attempt SMTP delivery immediately
+and will still record the attempt in `email_deliveries`. The UI keeps the invite
+token visible as a fallback if SMTP delivery fails.
+
 For OIDC SSO, add:
 
 ```text
@@ -143,7 +148,8 @@ Then create an account from the UI and run a small document flow:
 ## Known Limitations
 
 - SQLite plus persistent disk is single-instance only.
-- `OPENJSON_EMAIL_BACKEND=console` does not send actual invitation emails.
+- `OPENJSON_EMAIL_BACKEND=console` records invitation deliveries and prints the
+  accept URL to logs, but does not send actual invitation emails.
 - OIDC SSO is disabled until provider environment variables are configured.
 - Redis fanout is not provisioned in this baseline deployment.
 - PostgreSQL migration is required before serious production scale.

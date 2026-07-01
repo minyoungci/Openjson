@@ -770,7 +770,36 @@
       },
     });
     els.inviteToken.value = invitation.token || "";
-    renderText(els.teamActionOutput, `Invite token created for ${invitation.email}.`, "ok-text");
+    renderInvitationResult(invitation);
+  }
+
+  function renderInvitationResult(invitation) {
+    clear(els.teamActionOutput);
+    const delivery = invitation.email_delivery || null;
+    if (!delivery) {
+      renderText(els.teamActionOutput, `Invite token created for ${invitation.email}.`, "ok-text");
+      return;
+    }
+    if (delivery.status === "sent") {
+      renderText(
+        els.teamActionOutput,
+        `Invitation email sent to ${invitation.email} via ${delivery.delivery_backend}.`,
+        "ok-text",
+      );
+    } else if (delivery.status === "skipped") {
+      renderText(
+        els.teamActionOutput,
+        `Invite created for ${invitation.email}. Email delivery is ${delivery.delivery_backend}.`,
+        "muted",
+      );
+    } else {
+      renderText(
+        els.teamActionOutput,
+        `Invite created for ${invitation.email}, but email delivery failed: ${delivery.error_message || "unknown error"}`,
+        "error-text",
+      );
+    }
+    renderText(els.teamActionOutput, "Invite token is available below as a fallback.", "muted");
   }
 
   async function acceptProjectInvite() {
