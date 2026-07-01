@@ -1751,6 +1751,7 @@
       } else if (payload.type === "error" && payload.error) {
         markLiveTextOperationUnacknowledged();
         renderErrorObject(els.collaborationPanel, payload.error);
+        resyncLiveTextSessionAfterConflict(payload.error);
       } else if (payload.type === "text_session.state") {
         applyLiveTextState(payload);
       } else if (payload.type === "text_session.op.accepted") {
@@ -1895,6 +1896,12 @@
       state.liveTextNeedsResync = true;
     }
     state.liveTextPendingOperation = false;
+  }
+
+  function resyncLiveTextSessionAfterConflict(error) {
+    if (error && error.code === "VERSION_CONFLICT" && state.liveTextEnabled && state.selectedDocumentId) {
+      window.setTimeout(() => joinLiveTextSession(), 0);
+    }
   }
 
   function handleLiveTextInput() {

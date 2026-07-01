@@ -14,8 +14,10 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.database import connect, init_db, utc_now
 from app.document_service import create_document, patch_document
+from app.errors import AppError, ErrorCode
 from app.main import create_app
 from app.realtime_service import CollaborationHub
+from app.text_collaboration_service import text_collaboration_manager
 
 
 class FakeWebSocket:
@@ -243,6 +245,119 @@ class RealtimeCollaborationTests(unittest.TestCase):
 
         loaded = self.client.get(f"/documents/{self.document['id']}", headers={"X-Actor-Id": self.owner_id})
         self.assertEqual(loaded.json()["content"]["name"], "Xbaseline")
+
+    def test_stale_delete_after_concurrent_insert_preserves_inserted_text(self) -> None:
+        document = create_document(
+            self.db_path,
+            project_id=self.project_id,
+            actor_id=self.owner_id,
+            full_path="config/text-transform-delete.json",
+            content={"text": "abc"},
+        )
+
+        async def scenario() -> dict[str, Any]:
+            state = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            index = state["content_text"].index("b")
+            first = await text_collaboration_manager.apply_operation(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+                message={
+                    "client_id": "owner-client",
+                    "client_operation_id": "owner-insert-before-b",
+                    "base_text_revision": state["text_revision"],
+                    "op": {"type": "insert", "index": index, "text": "X"},
+                },
+            )
+            second = await text_collaboration_manager.apply_operation(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.editor_id,
+                message={
+                    "client_id": "editor-client",
+                    "client_operation_id": "editor-delete-b",
+                    "base_text_revision": state["text_revision"],
+                    "op": {"type": "delete", "index": index, "length": 1},
+                },
+            )
+            committed = await text_collaboration_manager.commit(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+                message={"text_revision": second["server_text_revision"]},
+            )
+            return {"first": first, "second": second, "committed": committed}
+
+        result = asyncio.run(scenario())
+
+        self.assertEqual(result["first"]["op"], {"type": "insert", "index": result["second"]["op"]["index"] - 1, "text": "X"})
+        self.assertEqual(result["second"]["op"]["type"], "delete")
+        loaded = self.client.get(f"/documents/{document['id']}", headers={"X-Actor-Id": self.owner_id})
+        self.assertEqual(loaded.json()["content"], {"text": "aXc"})
+
+    def test_stale_delete_requiring_split_is_rejected_without_mutating_text(self) -> None:
+        document = create_document(
+            self.db_path,
+            project_id=self.project_id,
+            actor_id=self.owner_id,
+            full_path="config/text-transform-conflict.json",
+            content={"text": "abcd"},
+        )
+
+        async def scenario() -> tuple[dict[str, Any], AppError, dict[str, Any]]:
+            state = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            insert_index = state["content_text"].index("c")
+            delete_index = state["content_text"].index("b")
+            accepted = await text_collaboration_manager.apply_operation(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+                message={
+                    "client_id": "owner-client",
+                    "client_operation_id": "owner-insert-before-c",
+                    "base_text_revision": state["text_revision"],
+                    "op": {"type": "insert", "index": insert_index, "text": "X"},
+                },
+            )
+            try:
+                await text_collaboration_manager.apply_operation(
+                    self.db_path,
+                    document_id=document["id"],
+                    actor_id=self.editor_id,
+                    message={
+                        "client_id": "editor-client",
+                        "client_operation_id": "editor-delete-bc",
+                        "base_text_revision": state["text_revision"],
+                        "op": {"type": "delete", "index": delete_index, "length": 2},
+                    },
+                )
+            except AppError as exc:
+                conflict = exc
+            else:
+                raise AssertionError("Expected stale text transform conflict")
+            current = await text_collaboration_manager.join(
+                self.db_path,
+                document_id=document["id"],
+                actor_id=self.owner_id,
+            )
+            return accepted, conflict, current
+
+        accepted, conflict, current = asyncio.run(scenario())
+
+        self.assertEqual(conflict.code, ErrorCode.VERSION_CONFLICT)
+        self.assertEqual(conflict.details["conflict_policy"], "reject_unsafe_text_transform")
+        self.assertEqual(current["text_revision"], accepted["server_text_revision"])
+        self.assertIn('"text": "abXcd"', current["content_text"])
+        loaded = self.client.get(f"/documents/{document['id']}", headers={"X-Actor-Id": self.owner_id})
+        self.assertEqual(loaded.json()["content"], {"text": "abcd"})
 
     def test_missing_actor_websocket_gets_structured_error(self) -> None:
         with self.client.websocket_connect(self._ws_path()) as websocket:

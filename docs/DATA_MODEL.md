@@ -418,6 +418,13 @@ and re-diff the visible local buffer instead of treating the optimistic shadow
 as clean. It is cleared after acknowledgement or resync and never becomes
 canonical document storage.
 
+TASK_138 stale live-text operation transform hardening also adds no table.
+Stale `text_session.op` messages are transformed only when the in-process
+single-operation protocol can preserve already accepted text safely. Unsafe
+transforms are rejected as `VERSION_CONFLICT` so clients resync transient
+session state; no canonical snapshots or append-only `document_events` are
+changed until a valid `text_session.commit` succeeds.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

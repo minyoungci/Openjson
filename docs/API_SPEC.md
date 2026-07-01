@@ -175,6 +175,8 @@ See `docs/TASK_136_PLAN.md` for browser live-text local-buffer preservation
 when session state arrives during join or reconnect.
 See `docs/TASK_137_PLAN.md` for browser live-text unacknowledged-operation
 preservation across WebSocket close/error before acknowledgement.
+See `docs/TASK_138_PLAN.md` for safer stale live-text operation transforms and
+single-operation transform conflict rejection.
 
 ## Deployment Version
 
@@ -521,6 +523,14 @@ If the WebSocket closes or errors before an outstanding local live-text
 operation is acknowledged, the browser keeps an unacknowledged-operation marker
 so the next session state still preserves and re-diffs the visible local
 buffer.
+Stale `text_session.op` messages are transformed across accepted operations
+only when the server can preserve accepted text with the single-operation
+protocol. If preserving another user's accepted text would require splitting a
+client operation, the server rejects the operation with `VERSION_CONFLICT` and
+the client should resync from `text_session.state`. The static browser client
+requests a fresh session state after live-text `VERSION_CONFLICT` errors and
+keeps its visible local buffer until it can re-diff against that authoritative
+state.
 
 Offline sync accepts a batch of queued client content-save operations:
 

@@ -345,24 +345,117 @@ def _transform_operation(incoming: dict[str, Any], accepted: dict[str, Any]) -> 
 
     if accepted_type == "insert":
         accepted_length = len(accepted["text"])
-        if incoming_index > accepted_index or (incoming_type == "insert" and incoming_index == accepted_index):
+        if incoming_type in {"delete", "replace"}:
+            incoming_end = incoming_index + transformed["length"]
+            if incoming_index < accepted_index < incoming_end:
+                _raise_text_transform_conflict(
+                    incoming,
+                    accepted,
+                    reason="accepted_insert_inside_incoming_range_requires_split",
+                )
+            if incoming_index >= accepted_index:
+                transformed["index"] = incoming_index + accepted_length
+        elif incoming_index >= accepted_index:
             transformed["index"] = incoming_index + accepted_length
     elif accepted_type == "delete":
         accepted_length = accepted["length"]
-        accepted_end = accepted_index + accepted_length
-        if incoming_index >= accepted_end:
-            transformed["index"] = incoming_index - accepted_length
-        elif incoming_index >= accepted_index:
-            transformed["index"] = accepted_index
+        transformed = _transform_across_removed_range(
+            transformed,
+            incoming,
+            accepted,
+            accepted_index=accepted_index,
+            removed_length=accepted_length,
+            inserted_length=0,
+        )
     elif accepted_type == "replace":
         removed_length = accepted["length"]
         inserted_length = len(accepted["text"])
-        accepted_end = accepted_index + removed_length
-        if incoming_index >= accepted_end:
-            transformed["index"] = incoming_index - removed_length + inserted_length
-        elif incoming_index >= accepted_index:
-            transformed["index"] = accepted_index + inserted_length
+        transformed = _transform_across_removed_range(
+            transformed,
+            incoming,
+            accepted,
+            accepted_index=accepted_index,
+            removed_length=removed_length,
+            inserted_length=inserted_length,
+        )
     return transformed
+
+
+def _transform_across_removed_range(
+    transformed: dict[str, Any],
+    incoming: dict[str, Any],
+    accepted: dict[str, Any],
+    *,
+    accepted_index: int,
+    removed_length: int,
+    inserted_length: int,
+) -> dict[str, Any]:
+    incoming_type = transformed["type"]
+    incoming_index = transformed["index"]
+    accepted_end = accepted_index + removed_length
+    delta = inserted_length - removed_length
+
+    if incoming_type == "insert":
+        if incoming_index >= accepted_end:
+            transformed["index"] = incoming_index + delta
+        elif incoming_index > accepted_index:
+            transformed["index"] = accepted_index + inserted_length
+        return transformed
+
+    incoming_end = incoming_index + transformed["length"]
+    if incoming_end <= accepted_index:
+        return transformed
+    if incoming_index >= accepted_end:
+        transformed["index"] = incoming_index + delta
+        return transformed
+
+    if incoming_type == "replace":
+        _raise_text_transform_conflict(
+            incoming,
+            accepted,
+            reason="stale_replace_overlaps_accepted_removed_range",
+        )
+
+    left_length = max(0, min(incoming_end, accepted_index) - incoming_index)
+    right_length = max(0, incoming_end - max(incoming_index, accepted_end))
+    remaining_length = left_length + right_length
+    if remaining_length <= 0:
+        _raise_text_transform_conflict(
+            incoming,
+            accepted,
+            reason="incoming_range_already_removed_by_accepted_operation",
+        )
+    if inserted_length > 0 and left_length > 0 and right_length > 0:
+        _raise_text_transform_conflict(
+            incoming,
+            accepted,
+            reason="accepted_replacement_inside_incoming_range_requires_split",
+        )
+    if left_length > 0:
+        transformed["index"] = incoming_index
+        transformed["length"] = left_length if inserted_length > 0 else remaining_length
+    else:
+        transformed["index"] = accepted_index + inserted_length
+        transformed["length"] = right_length
+    return transformed
+
+
+def _raise_text_transform_conflict(
+    incoming: dict[str, Any],
+    accepted: dict[str, Any],
+    *,
+    reason: str,
+) -> None:
+    raise AppError(
+        ErrorCode.VERSION_CONFLICT,
+        "Text operation conflict. Reload collaborative text session.",
+        {
+            "conflict_policy": "reject_unsafe_text_transform",
+            "reason": reason,
+            "incoming_op": incoming,
+            "accepted_op": accepted,
+        },
+    )
 
 
 def _apply_text_operation(text: str, op: dict[str, Any]) -> str:
