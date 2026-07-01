@@ -1781,6 +1781,13 @@
     return true;
   }
 
+  function newClientOperationId(prefix) {
+    if (window.crypto && crypto.randomUUID) {
+      return `${prefix}-${crypto.randomUUID()}`;
+    }
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
   function joinLiveTextSession() {
     if (!state.liveTextEnabled || !state.selectedDocumentId) {
       return;
@@ -1820,10 +1827,10 @@
       return;
     }
     state.liveTextRevision = payload.server_text_revision || state.liveTextRevision;
-    state.liveTextShadow = applyTextOperation(state.liveTextShadow, payload.op);
-    if (payload.client_id === state.liveTextClientId) {
+    if (payload.idempotent_replay || payload.client_id === state.liveTextClientId) {
       return;
     }
+    state.liveTextShadow = applyTextOperation(state.liveTextShadow, payload.op);
     state.liveTextApplyingRemote = true;
     els.editorBuffer.value = applyTextOperation(els.editorBuffer.value, payload.op);
     state.liveTextApplyingRemote = false;
@@ -1841,6 +1848,7 @@
     const sent = sendRealtimeMessage({
       type: "text_session.op",
       client_id: state.liveTextClientId,
+      client_operation_id: newClientOperationId("live-op"),
       base_text_revision: state.liveTextRevision,
       op,
     });

@@ -1072,7 +1072,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
                             actor_id=actor_id,
                             message=message,
                         )
-                        await collaboration_hub.broadcast(document_id, accepted)
+                        if accepted.get("idempotent_replay"):
+                            await websocket.send_json(accepted)
+                        else:
+                            await collaboration_hub.broadcast(document_id, accepted)
                     elif message_type == "text_session.commit":
                         committed = await text_collaboration_manager.commit(
                             application.state.db_path,

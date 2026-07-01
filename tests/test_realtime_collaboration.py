@@ -207,6 +207,41 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertIn("baseline", state["content_text"])
         self.assertNotIn("viewer", state["content_text"])
 
+    def test_duplicate_text_session_operation_is_idempotent(self) -> None:
+        with self.client.websocket_connect(self._ws_path(self.owner_id)) as websocket:
+            websocket.receive_json()
+            websocket.send_json({"type": "text_session.join"})
+            state = websocket.receive_json()
+            index = state["content_text"].index("baseline")
+            operation = {
+                "type": "text_session.op",
+                "client_id": "owner-client",
+                "client_operation_id": "owner-op-1",
+                "base_text_revision": state["text_revision"],
+                "op": {"type": "insert", "index": index, "text": "X"},
+            }
+
+            websocket.send_json(operation)
+            accepted = websocket.receive_json()
+            self.assertEqual(accepted["type"], "text_session.op.accepted")
+            self.assertFalse(accepted["idempotent_replay"])
+            self.assertEqual(accepted["server_text_revision"], 1)
+
+            websocket.send_json(operation)
+            replayed = websocket.receive_json()
+            self.assertEqual(replayed["type"], "text_session.op.accepted")
+            self.assertTrue(replayed["idempotent_replay"])
+            self.assertEqual(replayed["server_text_revision"], accepted["server_text_revision"])
+            self.assertEqual(replayed["client_operation_id"], "owner-op-1")
+
+            websocket.send_json({"type": "text_session.commit", "text_revision": replayed["server_text_revision"]})
+            committed = websocket.receive_json()
+            self.assertEqual(committed["type"], "text_session.committed")
+            self.assertEqual(committed["result_version"], 2)
+
+        loaded = self.client.get(f"/documents/{self.document['id']}", headers={"X-Actor-Id": self.owner_id})
+        self.assertEqual(loaded.json()["content"]["name"], "Xbaseline")
+
     def test_missing_actor_websocket_gets_structured_error(self) -> None:
         with self.client.websocket_connect(self._ws_path()) as websocket:
             message = websocket.receive_json()

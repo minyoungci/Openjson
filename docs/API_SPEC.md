@@ -163,6 +163,8 @@ See `docs/TASK_130_PLAN.md` for production-safe unexpected internal error
 responses.
 See `docs/TASK_131_PLAN.md` for WebSocket collaborative text-session write
 permission hardening.
+See `docs/TASK_132_PLAN.md` for idempotent WebSocket collaborative text
+operations.
 
 ## Deployment Version
 
@@ -484,6 +486,10 @@ It does not make raw text canonical storage and does not persist syntax-invalid
 JSON. `OPENJSON_WS_RATE_LIMIT_*` can enable a per-connection fixed-window
 WebSocket message limit. Limited connections receive a structured
 `RATE_LIMITED` error payload and then close.
+`text_session.op` may include `client_operation_id`. Duplicate messages with
+the same `(actor_id, client_operation_id)` in the active text session return
+the original `text_session.op.accepted` payload with `idempotent_replay = true`
+and are not re-broadcast to other sockets.
 
 Offline sync accepts a batch of queued client content-save operations:
 

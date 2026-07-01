@@ -377,6 +377,12 @@ table. `text_session.join` remains a read-permission operation, while
 before mutating transient text-session state or writing a durable
 `document_events` update.
 
+TASK_132 WebSocket text-operation idempotency also adds no table. Optional
+`client_operation_id` values are kept only in the in-process transient text
+session operation list and prevent duplicate `text_session.op` messages from
+mutating shared text twice. Durable JSON history remains only the accepted
+`document_events` row created by `text_session.commit`.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

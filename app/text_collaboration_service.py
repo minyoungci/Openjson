@@ -20,6 +20,7 @@ class AcceptedTextOperation:
     base_revision: int
     actor_id: str
     client_id: str | None
+    client_operation_id: str | None
     op: dict[str, Any]
     created_at: str
 
@@ -70,10 +71,23 @@ class TextCollaborationManager:
         _require_text_session_write_permission(db_path, document_id=document_id, actor_id=actor_id)
         await self.join(db_path, document_id=document_id, actor_id=actor_id)
         client_id = message.get("client_id")
+        client_operation_id = _optional_client_operation_id(message.get("client_operation_id"))
         base_revision = _ensure_revision(message.get("base_text_revision"))
         incoming = _normalize_text_operation(message.get("op"))
         async with self._lock:
             session = self._require_session(document_id)
+            if client_operation_id is not None:
+                existing = _find_accepted_client_operation(
+                    session,
+                    actor_id=actor_id,
+                    client_operation_id=client_operation_id,
+                )
+                if existing is not None:
+                    return _operation_payload(
+                        session,
+                        existing,
+                        idempotent_replay=True,
+                    )
             if base_revision > session.revision:
                 raise AppError(
                     ErrorCode.INVALID_REQUEST,
@@ -91,6 +105,7 @@ class TextCollaborationManager:
                 base_revision=base_revision,
                 actor_id=actor_id,
                 client_id=str(client_id) if client_id is not None else None,
+                client_operation_id=client_operation_id,
                 op=transformed,
                 created_at=utc_now(),
             )
@@ -98,17 +113,7 @@ class TextCollaborationManager:
             if len(session.operations) > MAX_TEXT_SESSION_OPERATIONS:
                 session.operations = session.operations[-MAX_TEXT_SESSION_OPERATIONS:]
             session.updated_at = accepted.created_at
-            return {
-                "type": "text_session.op.accepted",
-                "document_id": document_id,
-                "document_version": session.document_version,
-                "server_text_revision": session.revision,
-                "base_text_revision": base_revision,
-                "actor_id": actor_id,
-                "client_id": accepted.client_id,
-                "op": transformed,
-                "created_at": accepted.created_at,
-            }
+            return _operation_payload(session, accepted, idempotent_replay=False)
 
     async def commit(
         self,
@@ -212,6 +217,39 @@ def _require_text_session_write_permission(db_path: str, *, document_id: str, ac
         )
 
 
+def _find_accepted_client_operation(
+    session: TextSession,
+    *,
+    actor_id: str,
+    client_operation_id: str,
+) -> AcceptedTextOperation | None:
+    for accepted in reversed(session.operations):
+        if accepted.actor_id == actor_id and accepted.client_operation_id == client_operation_id:
+            return accepted
+    return None
+
+
+def _operation_payload(
+    session: TextSession,
+    accepted: AcceptedTextOperation,
+    *,
+    idempotent_replay: bool,
+) -> dict[str, Any]:
+    return {
+        "type": "text_session.op.accepted",
+        "document_id": session.document_id,
+        "document_version": session.document_version,
+        "server_text_revision": accepted.server_revision,
+        "base_text_revision": accepted.base_revision,
+        "actor_id": accepted.actor_id,
+        "client_id": accepted.client_id,
+        "client_operation_id": accepted.client_operation_id,
+        "op": accepted.op,
+        "created_at": accepted.created_at,
+        "idempotent_replay": idempotent_replay,
+    }
+
+
 def _ensure_revision(value: Any) -> int:
     if not isinstance(value, int) or value < 0:
         raise AppError(
@@ -220,6 +258,25 @@ def _ensure_revision(value: Any) -> int:
             {"value": value},
         )
     return value
+
+
+def _optional_client_operation_id(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise AppError(
+            ErrorCode.INVALID_REQUEST,
+            "client_operation_id must be a non-empty string when provided.",
+            {"client_operation_id": value},
+        )
+    normalized = value.strip()
+    if len(normalized) > 128:
+        raise AppError(
+            ErrorCode.INVALID_REQUEST,
+            "client_operation_id is too long.",
+            {"max_length": 128},
+        )
+    return normalized
 
 
 def _normalize_text_operation(value: Any) -> dict[str, Any]:
