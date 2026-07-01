@@ -149,6 +149,8 @@ See `docs/TASK_118_PLAN.md` for the HTTP request body size guard.
 See `docs/TASK_119_PLAN.md` for the project usage limit guard.
 See `docs/TASK_120_PLAN.md` for the SQLite backup retention guard.
 See `docs/TASK_121_PLAN.md` for deployment smoke failure diagnostics.
+See `docs/TASK_122_PLAN.md` for the release preflight CLI.
+See `docs/TASK_123_PLAN.md` for encrypted SQLite MVP backup/restore.
 
 ## Deployment Version
 

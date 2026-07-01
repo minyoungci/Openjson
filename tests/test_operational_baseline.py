@@ -19,6 +19,7 @@ from app.document_service import create_document, delete_document, patch_documen
 from app.integrity_service import check_database_integrity, check_event_chain_consistency, check_replay_consistency
 from app.main import create_app
 from app.workspace_service import create_project, create_user, create_workspace
+from scripts.backup_crypto import generate_backup_encryption_key
 from scripts.backup_sqlite import backup_sqlite
 from scripts.restore_sqlite import restore_sqlite
 
@@ -41,6 +42,8 @@ class OperationalBaselineTests(unittest.TestCase):
         self.tmp.cleanup()
         os.environ.pop("OPENJSON_REQUEST_LOGGING", None)
         os.environ.pop("OPENJSON_CORS_ORIGINS", None)
+        os.environ.pop("OPENJSON_BACKUP_ENCRYPTION_KEY", None)
+        os.environ.pop("OPENJSON_BACKUP_ENCRYPTION_ENABLED", None)
 
     def _create_changed_document(self) -> dict:
         document = create_document(
@@ -643,6 +646,175 @@ class OperationalBaselineTests(unittest.TestCase):
         self.assertEqual(check_replay_consistency(restored_db)["status"], "ok")
         self.assertEqual(check_event_chain_consistency(restored_db)["status"], "ok")
 
+    def test_encrypted_backup_and_restore_preserves_replay_consistency(self) -> None:
+        self._create_changed_document()
+        backup_dir = str(Path(self.tmp.name) / "encrypted-backups")
+        restored_db = str(Path(self.tmp.name) / "encrypted-restored.sqlite3")
+        encryption_key = generate_backup_encryption_key()
+
+        backup_manifest = backup_sqlite(
+            self.db_path,
+            backup_dir,
+            encrypt=True,
+            encryption_key=encryption_key,
+        )
+        restore_result = restore_sqlite(
+            backup_manifest["backup_path"],
+            restored_db,
+            encryption_key=encryption_key,
+        )
+
+        backup_path = Path(backup_manifest["backup_path"])
+        manifest_file_payload = json.loads(Path(backup_manifest["manifest_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(backup_manifest["status"], "created")
+        self.assertTrue(backup_path.name.endswith(".sqlite3.enc"))
+        self.assertTrue(backup_path.exists())
+        self.assertEqual(backup_manifest["encryption"]["enabled"], True)
+        self.assertEqual(backup_manifest["encryption"]["algorithm"], "fernet")
+        self.assertNotEqual(backup_manifest["sha256"], backup_manifest["encryption"]["plaintext_sha256"])
+        self.assertEqual(manifest_file_payload["encryption"]["enabled"], True)
+        self.assertEqual(manifest_file_payload["sha256"], backup_manifest["sha256"])
+        self.assertEqual(restore_result["status"], "restored")
+        self.assertEqual(restore_result["manifest_verification"]["status"], "ok")
+        self.assertEqual(restore_result["decryption"]["status"], "ok")
+        self.assertEqual(
+            restore_result["decryption"]["plaintext_sha256"],
+            backup_manifest["encryption"]["plaintext_sha256"],
+        )
+        self.assertEqual(restore_result["integrity"]["status"], "ok")
+        self.assertEqual(check_replay_consistency(restored_db)["status"], "ok")
+        self.assertEqual(check_event_chain_consistency(restored_db)["status"], "ok")
+
+    def test_encrypted_restore_requires_key_before_target_creation(self) -> None:
+        self._create_changed_document()
+        backup_dir = str(Path(self.tmp.name) / "encrypted-missing-key-backups")
+        restored_db = Path(self.tmp.name) / "encrypted-missing-key-restored.sqlite3"
+        encryption_key = generate_backup_encryption_key()
+
+        backup_manifest = backup_sqlite(
+            self.db_path,
+            backup_dir,
+            encrypt=True,
+            encryption_key=encryption_key,
+        )
+        restore_result = restore_sqlite(backup_manifest["backup_path"], str(restored_db))
+
+        self.assertEqual(restore_result["status"], "failed")
+        self.assertEqual(restore_result["manifest_verification"]["status"], "ok")
+        self.assertEqual(restore_result["decryption"]["status"], "failed")
+        self.assertIn("OPENJSON_BACKUP_ENCRYPTION_KEY", restore_result["decryption"]["message"])
+        self.assertFalse(restored_db.exists())
+
+    def test_encrypted_restore_rejects_wrong_key_before_target_creation(self) -> None:
+        self._create_changed_document()
+        backup_dir = str(Path(self.tmp.name) / "encrypted-wrong-key-backups")
+        restored_db = Path(self.tmp.name) / "encrypted-wrong-key-restored.sqlite3"
+
+        backup_manifest = backup_sqlite(
+            self.db_path,
+            backup_dir,
+            encrypt=True,
+            encryption_key=generate_backup_encryption_key(),
+        )
+        restore_result = restore_sqlite(
+            backup_manifest["backup_path"],
+            str(restored_db),
+            encryption_key=generate_backup_encryption_key(),
+        )
+
+        self.assertEqual(restore_result["status"], "failed")
+        self.assertEqual(restore_result["manifest_verification"]["status"], "ok")
+        self.assertEqual(restore_result["decryption"]["status"], "failed")
+        self.assertIn("Backup decryption failed", restore_result["decryption"]["message"])
+        self.assertFalse(restored_db.exists())
+
+    def test_encrypted_restore_rejects_tampered_ciphertext_before_target_creation(self) -> None:
+        self._create_changed_document()
+        backup_dir = str(Path(self.tmp.name) / "encrypted-tampered-backups")
+        restored_db = Path(self.tmp.name) / "encrypted-tampered-restored.sqlite3"
+        encryption_key = generate_backup_encryption_key()
+
+        backup_manifest = backup_sqlite(
+            self.db_path,
+            backup_dir,
+            encrypt=True,
+            encryption_key=encryption_key,
+        )
+        with Path(backup_manifest["backup_path"]).open("ab") as handle:
+            handle.write(b"tampered")
+
+        restore_result = restore_sqlite(
+            backup_manifest["backup_path"],
+            str(restored_db),
+            encryption_key=encryption_key,
+        )
+
+        self.assertEqual(restore_result["status"], "failed")
+        self.assertEqual(restore_result["manifest_verification"]["status"], "failed")
+        self.assertEqual(restore_result["manifest_verification"]["message"], "Backup file does not match its manifest.")
+        self.assertFalse(restored_db.exists())
+
+    def test_encrypted_backup_and_restore_cli_use_environment_key(self) -> None:
+        self._create_changed_document()
+        backup_dir = Path(self.tmp.name) / "encrypted-cli-backups"
+        restored_db = Path(self.tmp.name) / "encrypted-cli-restored.sqlite3"
+        root = Path(__file__).resolve().parents[1]
+
+        key_result = subprocess.run(
+            [sys.executable, "scripts/backup_sqlite.py", "--generate-encryption-key"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(key_result.returncode, 0)
+        encryption_key = json.loads(key_result.stdout)["key"]
+        env = {**os.environ, "OPENJSON_BACKUP_ENCRYPTION_KEY": encryption_key}
+
+        backup_cli = subprocess.run(
+            [
+                sys.executable,
+                "scripts/backup_sqlite.py",
+                "--db-path",
+                self.db_path,
+                "--output-dir",
+                str(backup_dir),
+                "--encrypt",
+            ],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(backup_cli.returncode, 0, backup_cli.stderr)
+        backup_payload = json.loads(backup_cli.stdout)
+        self.assertTrue(backup_payload["backup_path"].endswith(".sqlite3.enc"))
+        self.assertEqual(backup_payload["encryption"]["enabled"], True)
+
+        restore_cli = subprocess.run(
+            [
+                sys.executable,
+                "scripts/restore_sqlite.py",
+                "--backup-path",
+                backup_payload["backup_path"],
+                "--target-db-path",
+                str(restored_db),
+            ],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(restore_cli.returncode, 0, restore_cli.stderr)
+        restore_payload = json.loads(restore_cli.stdout)
+        self.assertEqual(restore_payload["status"], "restored")
+        self.assertEqual(restore_payload["decryption"]["status"], "ok")
+        self.assertEqual(restore_payload["integrity"]["status"], "ok")
+        self.assertTrue(restored_db.exists())
+
     def test_backup_retention_prunes_oldest_successful_backup_pair(self) -> None:
         self._create_changed_document()
         backup_dir = str(Path(self.tmp.name) / "retention-backups")
@@ -666,6 +838,33 @@ class OperationalBaselineTests(unittest.TestCase):
         self.assertTrue(Path(third["manifest_path"]).exists())
         self.assertEqual(
             len(list(Path(backup_dir).glob("openjson-backup-*.sqlite3"))),
+            2,
+        )
+
+    def test_backup_retention_prunes_encrypted_backup_pairs(self) -> None:
+        self._create_changed_document()
+        backup_dir = str(Path(self.tmp.name) / "encrypted-retention-backups")
+        encryption_key = generate_backup_encryption_key()
+
+        first = backup_sqlite(self.db_path, backup_dir, retention_count=5, encrypt=True, encryption_key=encryption_key)
+        time.sleep(0.01)
+        second = backup_sqlite(self.db_path, backup_dir, retention_count=5, encrypt=True, encryption_key=encryption_key)
+        time.sleep(0.01)
+        third = backup_sqlite(self.db_path, backup_dir, retention_count=2, encrypt=True, encryption_key=encryption_key)
+
+        self.assertEqual(third["integrity"]["status"], "ok")
+        self.assertEqual(third["retention"]["status"], "ok")
+        self.assertEqual(third["retention"]["keep_count"], 2)
+        self.assertEqual(third["retention"]["pruned_count"], 1)
+        self.assertEqual(third["retention"]["remaining_count"], 2)
+        self.assertFalse(Path(first["backup_path"]).exists())
+        self.assertFalse(Path(first["manifest_path"]).exists())
+        self.assertTrue(Path(second["backup_path"]).exists())
+        self.assertTrue(Path(second["manifest_path"]).exists())
+        self.assertTrue(Path(third["backup_path"]).exists())
+        self.assertTrue(Path(third["manifest_path"]).exists())
+        self.assertEqual(
+            len(list(Path(backup_dir).glob("openjson-backup-*.sqlite3.enc"))),
             2,
         )
 

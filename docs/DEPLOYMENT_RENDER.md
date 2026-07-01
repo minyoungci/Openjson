@@ -107,6 +107,22 @@ with `PROJECT_USAGE_LIMIT_EXCEEDED` before document event or snapshot writes.
 The default Render guard is 10,000 active documents and 100 MiB of active latest
 snapshot JSON per project.
 
+For manual encrypted SQLite backups from the Render shell or an attached
+operational job, add a secret environment variable:
+
+```text
+OPENJSON_BACKUP_ENCRYPTION_KEY=<generated Fernet key>
+```
+
+Generate the key locally with:
+
+```powershell
+python scripts\backup_sqlite.py --generate-encryption-key
+```
+
+Do not commit the key. Encrypted backups use `.sqlite3.enc` and must be
+restored with the same key.
+
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
 ```text
@@ -238,6 +254,9 @@ Then create an account from the UI and run a small document flow:
   should enforce distributed limits before scaling.
 - WebSocket message limiting is per-connection and in-process. It does not
   replace distributed connection limits or Cloudflare abuse controls.
+- Backup encryption is available in the SQLite backup script, but backup
+  scheduling and remote object storage lifecycle management are not provisioned
+  in this Render baseline.
 - OIDC SSO is disabled until provider environment variables are configured.
 - Redis fanout is not provisioned in this baseline deployment.
 - PostgreSQL migration is required before serious production scale.

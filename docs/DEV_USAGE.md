@@ -570,6 +570,23 @@ python scripts\backup_sqlite.py --db-path "D:\OpenJson\openjson.sqlite3" --outpu
 You can also set `$env:OPENJSON_BACKUP_RETENTION_COUNT = "7"`. Retention runs
 only after the new backup passes the combined integrity check.
 
+Encrypted SQLite MVP backup:
+
+```powershell
+python scripts\backup_sqlite.py --generate-encryption-key
+$env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
+python scripts\backup_sqlite.py `
+  --db-path "D:\OpenJson\openjson.sqlite3" `
+  --output-dir "D:\OpenJson\backups" `
+  --encrypt `
+  --retention-count 7
+```
+
+Encrypted backups use `.sqlite3.enc`. The manifest records ciphertext and
+plaintext verification metadata, but not the key. Keep
+`OPENJSON_BACKUP_ENCRYPTION_KEY` in the deployment secret store, not in source
+control.
+
 SQLite MVP restore smoke:
 
 ```powershell
@@ -581,6 +598,8 @@ When an adjacent `.manifest.json` exists, restore verifies the backup file
 Malformed manifest JSON fails before target DB creation. Missing manifests are
 reported as `manifest_verification.status=not_found` and restore continues for
 backward compatibility.
+For encrypted backups, set `OPENJSON_BACKUP_ENCRYPTION_KEY` before restore.
+Missing or wrong keys fail before target DB creation.
 
 Optional structured request logging:
 
@@ -965,6 +984,8 @@ See `docs/TASK_030_PLAN.md` for the read-only event-chain consistency CLI.
 
 See `docs/TASK_031_PLAN.md` for the backup/restore combined integrity
 envelope.
+
+See `docs/TASK_123_PLAN.md` for encrypted SQLite MVP backup/restore.
 
 See `docs/TASK_032_PLAN.md` for the project export event-chain integrity
 baseline.

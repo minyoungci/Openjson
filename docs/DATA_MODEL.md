@@ -329,6 +329,12 @@ operational state for `scripts/backup_sqlite.py` and does not mutate
 `json_documents`, `document_events`, schema migrations, audit rows, or
 canonical JSON content.
 
+TASK_123 SQLite backup encryption also adds no table. It encrypts backup files
+on disk and records non-secret verification metadata in adjacent backup
+manifests. Restore decrypts to temporary local files before running the same
+combined database integrity checks. Encryption keys remain external operational
+secrets and are never stored in SQLite or backup manifests.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

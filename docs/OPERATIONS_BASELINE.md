@@ -132,9 +132,26 @@ python scripts\backup_sqlite.py --db-path "D:\OpenJson\openjson.sqlite3" --outpu
 
 `OPENJSON_BACKUP_RETENTION_COUNT` may be used as the default retention count.
 Retention applies only to `openjson-backup-*.sqlite3` files in the selected
-output directory and deletes adjacent manifest files for pruned backups. It
-runs only when the newly created backup's combined integrity status is `ok`;
-failed-integrity backups skip pruning so older known backups remain available.
+output directory, including encrypted `openjson-backup-*.sqlite3.enc` files,
+and deletes adjacent manifest files for pruned backups. It runs only when the
+newly created backup's combined integrity status is `ok`; failed-integrity
+backups skip pruning so older known backups remain available.
+
+Optional encryption:
+
+```powershell
+python scripts\backup_sqlite.py --generate-encryption-key
+$env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
+python scripts\backup_sqlite.py `
+  --db-path "D:\OpenJson\openjson.sqlite3" `
+  --output-dir "D:\OpenJson\backups" `
+  --encrypt `
+  --retention-count 7
+```
+
+Encrypted backup files use `.sqlite3.enc`. The manifest records ciphertext
+size/SHA-256 and plaintext size/SHA-256, but it never stores the encryption
+key. The temporary plaintext backup is deleted after encryption.
 
 ## SQLite MVP Restore
 
@@ -153,12 +170,27 @@ and size before writing the target DB. Malformed manifest JSON fails before
 target creation. Missing manifests are reported as `not_found` and restore
 continues for backward compatibility.
 
+Restore an encrypted backup:
+
+```powershell
+$env:OPENJSON_BACKUP_ENCRYPTION_KEY = "<generated-key>"
+python scripts\restore_sqlite.py `
+  --backup-path "D:\OpenJson\backups\openjson-backup-<timestamp>.sqlite3.enc" `
+  --target-db-path "D:\OpenJson\restored.sqlite3"
+```
+
+Encrypted restore verifies the ciphertext manifest, decrypts to a temporary
+SQLite file, verifies plaintext size/SHA-256, restores the target DB, then
+runs the same combined integrity checks. Missing or wrong encryption keys fail
+before target creation.
+
 ## Boundaries
 
-- Backup encryption is not implemented.
 - Backup scheduling is not implemented.
 - Backup retention is local filesystem retention only; there is no managed
   remote object storage lifecycle policy.
+- Backup encryption is implemented for the SQLite MVP script, but key
+  management and rotation remain external operational responsibilities.
 - PostgreSQL backup/restore is a future task.
 - Centralized logs, metrics, traces, and alerting are future tasks.
 - Replay consistency checks are read-only and do not repair corrupted data.
