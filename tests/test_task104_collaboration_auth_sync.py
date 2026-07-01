@@ -242,6 +242,34 @@ class Task104CollaborationAuthSyncTests(unittest.TestCase):
         history = self.client.get(f"/documents/{document['id']}/history", headers=headers)
         self.assertEqual([event["event_type"] for event in history.json()["events"]], ["create", "update"])
 
+    def test_websocket_actor_query_fallback_can_be_disabled(self) -> None:
+        owner, _, project = self._project()
+        headers = {"Authorization": f"Bearer {owner['token']}"}
+        document = self.client.post(
+            f"/projects/{project['id']}/documents",
+            headers=headers,
+            json={"full_path": "secure/live.json", "content": {"a": 1}},
+        ).json()
+
+        with patch.dict(os.environ, {"OPENJSON_ALLOW_ACTOR_HEADER": "0"}, clear=False):
+            client = TestClient(create_app(self.db_path))
+            with client.websocket_connect(
+                f"/ws/documents/{document['id']}/collaboration?actor_id={owner['user']['id']}"
+            ) as websocket:
+                rejected = websocket.receive_json()
+
+            self.assertEqual(rejected["type"], "error")
+            self.assertEqual(rejected["error"]["code"], "AUTH_REQUIRED")
+            self.assertFalse(rejected["error"]["details"]["actor_query_allowed"])
+
+            with client.websocket_connect(
+                f"/ws/documents/{document['id']}/collaboration?token={owner['token']}"
+            ) as websocket:
+                connected = websocket.receive_json()
+
+            self.assertEqual(connected["type"], "collaboration_state")
+            self.assertEqual(connected["state"]["document_id"], document["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

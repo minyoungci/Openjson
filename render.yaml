@@ -25,3 +25,5 @@ services:
         value: console
       - key: OPENJSON_REQUEST_LOGGING
         value: "1"
+      - key: OPENJSON_ALLOW_ACTOR_HEADER
+        value: "0"

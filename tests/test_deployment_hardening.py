@@ -112,11 +112,14 @@ class DeploymentHardeningTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
         dockerignore = (root / ".dockerignore").read_text(encoding="utf-8")
+        render_yaml = (root / "render.yaml").read_text(encoding="utf-8")
 
         self.assertIn("uvicorn", dockerfile)
         self.assertIn("OPENJSON_DB_PATH", dockerfile)
         self.assertIn("*.sqlite3", dockerignore)
         self.assertIn("__pycache__/", dockerignore)
+        self.assertIn("OPENJSON_ALLOW_ACTOR_HEADER", render_yaml)
+        self.assertIn('value: "0"', render_yaml)
 
 
 if __name__ == "__main__":

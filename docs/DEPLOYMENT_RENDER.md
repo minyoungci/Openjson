@@ -73,7 +73,13 @@ OPENJSON_PUBLIC_BASE_URL=https://openjson.thelumen.work
 OPENJSON_CORS_ORIGINS=https://openjson.thelumen.work
 OPENJSON_EMAIL_BACKEND=console
 OPENJSON_REQUEST_LOGGING=1
+OPENJSON_ALLOW_ACTOR_HEADER=0
 ```
+
+`OPENJSON_ALLOW_ACTOR_HEADER=0` disables the development-only actor id fallback
+on the public deployment. The browser app uses session bearer tokens, and
+tokenless `X-Actor-Id` HTTP requests or WebSocket `actor_id` connections are
+rejected.
 
 For real email delivery, switch `OPENJSON_EMAIL_BACKEND` to `smtp` and add:
 
@@ -150,6 +156,8 @@ Then create an account from the UI and run a small document flow:
 - SQLite plus persistent disk is single-instance only.
 - `OPENJSON_EMAIL_BACKEND=console` records invitation deliveries and prints the
   accept URL to logs, but does not send actual invitation emails.
+- The public deployment disables the local `X-Actor-Id` / WebSocket
+  `actor_id` fallback; use login/session tokens through the UI.
 - OIDC SSO is disabled until provider environment variables are configured.
 - Redis fanout is not provisioned in this baseline deployment.
 - PostgreSQL migration is required before serious production scale.

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -49,6 +51,36 @@ class SessionInvitationTests(unittest.TestCase):
         revoked = self.client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(revoked.status_code, 401)
         self.assertEqual(revoked.json()["error"]["code"], "AUTH_REQUIRED")
+
+    def test_actor_header_fallback_can_be_disabled_for_http_requests(self) -> None:
+        with patch.dict(os.environ, {"OPENJSON_ALLOW_ACTOR_HEADER": "0"}, clear=False):
+            client = TestClient(create_app(self.db_path))
+            signup = client.post(
+                "/auth/signup",
+                json={"email": "secure@example.com", "display_name": "Secure User", "password": "password-123"},
+            )
+            self.assertEqual(signup.status_code, 200, signup.text)
+            actor_id = signup.json()["user"]["id"]
+            token = signup.json()["token"]
+
+            public = client.get("/health", headers={"X-Actor-Id": actor_id})
+            self.assertEqual(public.status_code, 200)
+
+            actor_only = client.get("/workspaces", headers={"X-Actor-Id": actor_id})
+            self.assertEqual(actor_only.status_code, 401)
+            self.assertEqual(actor_only.json()["error"]["code"], "AUTH_REQUIRED")
+            self.assertFalse(actor_only.json()["error"]["details"]["actor_header_allowed"])
+
+            bearer = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(bearer.status_code, 200)
+            self.assertEqual(bearer.json()["user"]["email"], "secure@example.com")
+
+            mismatch = client.get(
+                "/auth/me",
+                headers={"Authorization": f"Bearer {token}", "X-Actor-Id": "other_user"},
+            )
+            self.assertEqual(mismatch.status_code, 403)
+            self.assertEqual(mismatch.json()["error"]["code"], "PERMISSION_DENIED")
 
     def test_project_invitation_accepts_matching_session_user(self) -> None:
         owner = self._signup("owner@example.com", "Owner")

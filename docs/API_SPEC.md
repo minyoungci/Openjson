@@ -45,6 +45,17 @@ Local development requests may still use:
 X-Actor-Id: <user id>
 ```
 
+Deployments can disable that development fallback with:
+
+```text
+OPENJSON_ALLOW_ACTOR_HEADER=0
+```
+
+When disabled, protected HTTP requests must authenticate with a bearer session
+or project API token. The server may still derive an internal actor header from
+a validated bearer token; client-supplied actor ids without bearer
+authentication are rejected with `AUTH_REQUIRED`.
+
 TASK_012 also supports project-scoped API tokens:
 
 ```text
@@ -125,6 +136,7 @@ See `docs/TASK_111_PLAN.md` for the team workspace smoke covering signup,
 invite, edit checkpoint, notes, diff, and replay.
 See `docs/TASK_112_PLAN.md` for the production entry UX cleanup that removes
 developer identity fallback from the static browser app.
+See `docs/TASK_113_PLAN.md` for the deployment auth fallback gate.
 
 ## Bootstrap, Workspace, Project
 
@@ -211,7 +223,8 @@ diagnostics.
 - `GET /documents/{document_id}/collaboration-state?since_version=1`
 - `POST /documents/{document_id}/presence`
 - `DELETE /documents/{document_id}/presence`
-- `WS /ws/documents/{document_id}/collaboration?actor_id=user_dev`
+- `WS /ws/documents/{document_id}/collaboration?actor_id=user_dev` when the
+  development actor-id fallback is enabled
 - `WS /ws/documents/{document_id}/collaboration?token=ojs_<session token>`
 - `GET /documents/{document_id}/integrity/replay`
 - `GET /documents/{document_id}/integrity/events`
@@ -364,18 +377,20 @@ transient operational state; they do not alter snapshots or document event
 history. Autosave in the local editor calls the existing content save API, so
 an accepted autosave is a normal append-only `event_type = "update"` document
 event. TASK_102 exposes the same state over
-`WS /ws/documents/{document_id}/collaboration?actor_id={actor_id}`. TASK_103
-also accepts `token=ojs_<session token>` or an API token query parameter for
-browser WebSocket clients. The WebSocket accepts `presence`, `refresh`,
-`ping`, `text_session.join`, `text_session.op`, and `text_session.commit`
-messages and sends `collaboration_state`, `pong`, `text_session.state`,
-`text_session.op.accepted`, `text_session.committed`, or structured `error`
-messages. Text session operations are transient OT-style insert/delete/replace
-operations; they become durable only when `text_session.commit` parses the
-current collaborative text as valid JSON and writes a normal append-only
-document update event. `OPENJSON_REDIS_URL` enables optional Redis fanout
-across app processes. It does not make raw text canonical storage and does not
-persist syntax-invalid JSON.
+`WS /ws/documents/{document_id}/collaboration?actor_id={actor_id}` when the
+development actor-id fallback is enabled. TASK_103 also accepts
+`token=ojs_<session token>` or an API token query parameter for browser
+WebSocket clients. When `OPENJSON_ALLOW_ACTOR_HEADER=0`, tokenless WebSocket
+`actor_id` fallback is rejected with `AUTH_REQUIRED`. The WebSocket accepts
+`presence`, `refresh`, `ping`, `text_session.join`, `text_session.op`, and
+`text_session.commit` messages and sends `collaboration_state`, `pong`,
+`text_session.state`, `text_session.op.accepted`, `text_session.committed`, or
+structured `error` messages. Text session operations are transient OT-style
+insert/delete/replace operations; they become durable only when
+`text_session.commit` parses the current collaborative text as valid JSON and
+writes a normal append-only document update event. `OPENJSON_REDIS_URL` enables
+optional Redis fanout across app processes. It does not make raw text canonical
+storage and does not persist syntax-invalid JSON.
 
 Offline sync accepts a batch of queued client content-save operations:
 

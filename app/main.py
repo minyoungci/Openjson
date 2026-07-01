@@ -153,6 +153,12 @@ def _env_flag(raw: str | None) -> bool:
     return bool(raw and raw.strip().lower() in {"1", "true", "yes", "on"})
 
 
+def _env_flag_default(raw: str | None, *, default: bool) -> bool:
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _request_fields_set(request: object) -> set[str]:
     model_fields_set = getattr(request, "model_fields_set", None)
     if model_fields_set is not None:
@@ -164,9 +170,17 @@ def create_app(db_path: str | None = None) -> FastAPI:
     application = FastAPI(title="Collaborative JSON DB Workspace")
     application.state.db_path = db_path or os.environ.get("OPENJSON_DB_PATH", DEFAULT_DB_PATH)
     application.state.static_dir = Path(__file__).resolve().parents[1] / "static"
+    application.state.allow_actor_header = _env_flag_default(
+        os.environ.get("OPENJSON_ALLOW_ACTOR_HEADER"),
+        default=True,
+    )
     collaboration_hub.configure(redis_url=os.environ.get("OPENJSON_REDIS_URL"))
     init_db(application.state.db_path)
-    configure_api_token_authentication(application, db_path=application.state.db_path)
+    configure_api_token_authentication(
+        application,
+        db_path=application.state.db_path,
+        allow_actor_header=application.state.allow_actor_header,
+    )
     configure_request_observability(
         application,
         emit_logs=_env_flag(os.environ.get("OPENJSON_REQUEST_LOGGING")),
@@ -834,6 +848,15 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 await websocket.send_json(websocket_error_payload(exc))
                 await websocket.close(code=1008)
                 return
+        elif actor_id and not application.state.allow_actor_header:
+            error = AppError(
+                ErrorCode.AUTH_REQUIRED,
+                "Bearer token authentication is required.",
+                {"actor_query_allowed": False},
+            )
+            await websocket.send_json(websocket_error_payload(error))
+            await websocket.close(code=1008)
+            return
         if not actor_id:
             error = AppError(
                 ErrorCode.AUTH_REQUIRED,
