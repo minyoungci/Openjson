@@ -598,6 +598,15 @@ session state, or switching selected documents invalidates outstanding save UI
 responses. Accepted saves still persist only through the existing content save
 pipeline as append-only `document_events`.
 
+TASK_163 stale rollback response guarding also adds no table. The static browser
+client tracks rollback requests in memory and applies a rollback response only
+while it still matches the latest request, selected document id, captured base
+version, and target version. Clearing the selected editor, receiving a live
+selected-document delete payload, clearing session state, or switching selected
+documents invalidates outstanding rollback UI responses. Accepted rollbacks
+still persist only through the existing rollback pipeline as append-only
+`document_events`.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -254,17 +254,33 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("const requestId = state.diffRequestId + 1", diff_loader)
         self.assertIn("state.diffRequestId = requestId", diff_loader)
         self.assertIn("if (!isCurrentDiffRequest(requestId, documentId, currentVersion, fromVersion, toVersion))", diff_loader)
+        rollback_loader = js.text.split("async function rollbackSelected()", 1)[1].split(
+            "async function loadCommentThreads", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", rollback_loader)
+        self.assertIn("const baseVersion = state.currentVersion", rollback_loader)
+        self.assertIn("const requestId = state.rollbackRequestId + 1", rollback_loader)
+        self.assertIn("state.rollbackRequestId = requestId", rollback_loader)
+        self.assertIn("state.rollingBack = true", rollback_loader)
+        self.assertIn("/documents/${encodeURIComponent(documentId)}/rollback", rollback_loader)
+        self.assertIn("base_version: baseVersion", rollback_loader)
+        self.assertIn("if (!isCurrentRollbackRequest(requestId, documentId, baseVersion, targetVersion))", rollback_loader)
+        self.assertIn("await loadBootstrap(documentId)", rollback_loader)
         self.assertIn("function isCurrentValidationRequest(requestId, documentId, currentVersion)", js.text)
         self.assertIn("function isCurrentPreviewRequest(requestId, documentId, baseVersion, contentText)", js.text)
         self.assertIn("function isCurrentConflictPreviewRequest(requestId, documentId, baseVersion, contentText)", js.text)
         self.assertIn("function isCurrentHistoryRequest(requestId, documentId, currentVersion)", js.text)
         self.assertIn("function isCurrentDiffRequest(requestId, documentId, currentVersion, fromVersion, toVersion)", js.text)
+        self.assertIn("function isCurrentRollbackRequest(requestId, documentId, baseVersion, targetVersion)", js.text)
         self.assertIn("function invalidateDocumentPanelRequests()", js.text)
         self.assertIn("state.validationRequestId += 1", js.text)
         self.assertIn("state.previewRequestId += 1", js.text)
         self.assertIn("state.conflictPreviewRequestId += 1", js.text)
         self.assertIn("state.historyRequestId += 1", js.text)
         self.assertIn("state.diffRequestId += 1", js.text)
+        self.assertIn("function invalidateRollbackRequests()", js.text)
+        self.assertIn("state.rollbackRequestId += 1", js.text)
+        self.assertIn("state.rollingBack = false", js.text)
         save_loader = js.text.split("async function saveSelected", 1)[1].split(
             "async function loadConflictPreview", 1
         )[0]
@@ -282,10 +298,11 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function invalidateSaveRequests()", js.text)
         self.assertIn("state.saveRequestId += 1", js.text)
         self.assertIn("state.saving = false", js.text)
-        self.assertIn("const busy = state.loading || state.saving || state.autosaving", js.text)
+        self.assertIn("const busy = state.loading || state.saving || state.rollingBack || state.autosaving", js.text)
         editor_state_setter = js.text.split("function setSelectedEditorState", 1)[1].split("function clearEditor", 1)[0]
         self.assertIn("state.selectedDocumentId !== editorState.document.id", editor_state_setter)
         self.assertIn("invalidateSaveRequests()", editor_state_setter)
+        self.assertIn("invalidateRollbackRequests()", editor_state_setter)
         self.assertIn("loadCommentThreads", js.text)
         self.assertIn("comment_threads.updated", js.text)
         self.assertIn("applyCommentThreadsUpdated", js.text)
@@ -352,6 +369,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateTeamMembersRequests()", session_clearer)
         self.assertIn("invalidateDocumentPanelRequests()", session_clearer)
         self.assertIn("invalidateSaveRequests()", session_clearer)
+        self.assertIn("invalidateRollbackRequests()", session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1
         )[0]

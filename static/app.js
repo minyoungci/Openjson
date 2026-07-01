@@ -163,7 +163,9 @@
     liveTextClientId: localStorage.getItem("openjson.liveTextClientId") || "",
     offlineQueue: readOfflineQueue(),
     saveRequestId: 0,
+    rollbackRequestId: 0,
     saving: false,
+    rollingBack: false,
     autosaving: false,
     conflictLocalText: "",
     originalText: "",
@@ -795,6 +797,7 @@
     invalidateCommentThreadsRequests();
     invalidateDocumentPanelRequests();
     invalidateSaveRequests();
+    invalidateRollbackRequests();
     state.bootstrap = null;
     state.selectedEditorState = null;
     state.projectMembers = [];
@@ -1251,6 +1254,7 @@
   function setSelectedEditorState(editorState) {
     if (state.selectedDocumentId && state.selectedDocumentId !== editorState.document.id) {
       invalidateSaveRequests();
+      invalidateRollbackRequests();
     }
     state.selectedEditorState = editorState;
     state.selectedDocumentId = editorState.document.id;
@@ -1293,6 +1297,7 @@
     invalidateCommentThreadsRequests();
     invalidateDocumentPanelRequests();
     invalidateSaveRequests();
+    invalidateRollbackRequests();
     state.originalText = "";
     state.liveTextShadow = "";
     state.liveTextRevision = 0;
@@ -1565,6 +1570,11 @@
     state.autosaving = false;
   }
 
+  function invalidateRollbackRequests() {
+    state.rollbackRequestId += 1;
+    state.rollingBack = false;
+  }
+
   async function loadConflictPreview(error) {
     const documentId = state.selectedDocumentId;
     const contentText = els.editorBuffer.value;
@@ -1714,7 +1724,9 @@
   }
 
   async function rollbackSelected() {
-    if (!state.selectedDocumentId || !state.currentVersion) {
+    const documentId = state.selectedDocumentId;
+    const baseVersion = state.currentVersion;
+    if (!documentId || !baseVersion) {
       return;
     }
     const targetVersion = Number(els.rollbackTarget.value);
@@ -1725,16 +1737,45 @@
     if (!window.confirm(`Rollback to version ${targetVersion}?`)) {
       return;
     }
-    const result = await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/rollback`, {
-      method: "POST",
-      body: {
-        base_version: state.currentVersion,
-        target_version: targetVersion,
-        reason: "Rollback from OpenJson UI",
-      },
-    });
+    const requestId = state.rollbackRequestId + 1;
+    state.rollbackRequestId = requestId;
+    state.rollingBack = true;
+    syncButtons();
+    let result;
+    try {
+      result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/rollback`, {
+        method: "POST",
+        body: {
+          base_version: baseVersion,
+          target_version: targetVersion,
+          reason: "Rollback from OpenJson UI",
+        },
+      });
+    } catch (error) {
+      if (!isCurrentRollbackRequest(requestId, documentId, baseVersion, targetVersion)) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (state.rollbackRequestId === requestId) {
+        state.rollingBack = false;
+        syncButtons();
+      }
+    }
+    if (!isCurrentRollbackRequest(requestId, documentId, baseVersion, targetVersion)) {
+      return;
+    }
     renderText(els.rollbackPanel, `Rollback event ${result.event_id} created.`, "ok-text");
-    await loadBootstrap(state.selectedDocumentId);
+    await loadBootstrap(documentId);
+  }
+
+  function isCurrentRollbackRequest(requestId, documentId, baseVersion, targetVersion) {
+    return (
+      state.rollbackRequestId === requestId &&
+      state.selectedDocumentId === documentId &&
+      state.currentVersion === baseVersion &&
+      Number(els.rollbackTarget.value) === targetVersion
+    );
   }
 
   async function loadCommentThreads() {
@@ -1792,6 +1833,7 @@
         invalidateCommentThreadsRequests();
         invalidateDocumentPanelRequests();
         invalidateSaveRequests();
+        invalidateRollbackRequests();
         state.liveTextShadow = "";
         state.liveTextRevision = 0;
         state.liveTextPendingOperation = false;
@@ -2714,7 +2756,7 @@
       state.createSchemaMatch.resolution &&
       state.createSchemaMatch.resolution.status === "ambiguous" &&
       !cleanOptional(els.schemaSelect.value);
-    const busy = state.loading || state.saving || state.autosaving;
+    const busy = state.loading || state.saving || state.rollingBack || state.autosaving;
     els.signupButton.disabled = busy;
     els.loginButton.disabled = busy;
     els.logoutButton.disabled = busy || !state.token;
