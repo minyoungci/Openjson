@@ -191,12 +191,13 @@ class CollaborationMonitoringTests(unittest.TestCase):
         heartbeat = client.post(
             f"/documents/{self.document['id']}/presence",
             headers={"X-Actor-Id": self.owner_id},
-            json={"status": "editing", "base_version": 1, "dirty": True},
+            json={"status": "editing", "base_version": 1, "dirty": True, "cursor_path": "/learning_rate"},
         )
         self.assertEqual(heartbeat.status_code, 200)
         self.assertEqual(heartbeat.json()["active_users"][0]["actor_id"], self.owner_id)
         self.assertEqual(heartbeat.json()["active_users"][0]["display_name"], "Owner")
         self.assertNotIn("email", heartbeat.json()["active_users"][0])
+        self.assertEqual(heartbeat.json()["active_users"][0]["cursor_path"], "/learning_rate")
 
         state = client.get(
             f"/documents/{self.document['id']}/collaboration-state?since_version=0",

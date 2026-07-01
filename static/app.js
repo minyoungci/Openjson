@@ -129,6 +129,7 @@
     schemaMatchTimer: null,
     zipFile: null,
     zipPreview: null,
+    presenceCursorTimer: null,
     collaborationTimer: null,
     presenceTimer: null,
     collaborationSocket: null,
@@ -336,8 +337,12 @@
     els.editorBuffer.addEventListener("input", () => {
       handleLiveTextInput();
       updateSyntaxState();
+      schedulePresenceCursorUpdate();
       syncButtons();
     });
+    els.editorBuffer.addEventListener("click", schedulePresenceCursorUpdate);
+    els.editorBuffer.addEventListener("keyup", schedulePresenceCursorUpdate);
+    els.editorBuffer.addEventListener("select", schedulePresenceCursorUpdate);
 
     els.reloadButton.addEventListener("click", () => {
       if (state.selectedDocumentId) {
@@ -2115,6 +2120,154 @@
     return `${text.slice(0, index)}${text.slice(index + length)}`;
   }
 
+  function escapeJsonPointerSegment(segment) {
+    return String(segment).replace(/~/g, "~0").replace(/\//g, "~1");
+  }
+
+  function pointerFromSegments(segments) {
+    return segments.length ? `/${segments.map(escapeJsonPointerSegment).join("/")}` : "";
+  }
+
+  function valuePathForContainer(parent) {
+    if (!parent) {
+      return [];
+    }
+    if (parent.type === "object") {
+      return parent.key === null ? parent.path.slice() : parent.path.concat(parent.key);
+    }
+    return parent.path.concat(String(parent.index));
+  }
+
+  function markValueComplete(stack) {
+    const parent = stack[stack.length - 1];
+    if (!parent) {
+      return;
+    }
+    if (parent.type === "object") {
+      parent.key = null;
+      parent.expecting = "comma";
+    } else {
+      parent.index += 1;
+      parent.expecting = "comma";
+    }
+  }
+
+  function currentJsonCursorPath(stack) {
+    const current = stack[stack.length - 1];
+    if (!current) {
+      return "";
+    }
+    if (current.type === "object") {
+      return pointerFromSegments(current.key === null ? current.path : current.path.concat(current.key));
+    }
+    return pointerFromSegments(current.path.concat(String(current.index)));
+  }
+
+  function readJsonStringToken(text, start) {
+    let value = "";
+    let i = start + 1;
+    while (i < text.length) {
+      const char = text[i];
+      if (char === "\\") {
+        value += text.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+      if (char === '"') {
+        return { value, end: i + 1 };
+      }
+      value += char;
+      i += 1;
+    }
+    return { value, end: i };
+  }
+
+  function skipJsonLiteral(text, start) {
+    let i = start;
+    while (i < text.length && !/[\s,\]}:]/.test(text[i])) {
+      i += 1;
+    }
+    return i;
+  }
+
+  function findJsonPointerNearOffset(text, offset) {
+    const stack = [];
+    let i = 0;
+    while (i < text.length && i <= offset) {
+      const char = text[i];
+      if (/\s/.test(char)) {
+        i += 1;
+        continue;
+      }
+      const parent = stack[stack.length - 1];
+      if (char === "{") {
+        stack.push({ type: "object", path: valuePathForContainer(parent), key: null, index: 0, expecting: "key" });
+        i += 1;
+        continue;
+      }
+      if (char === "[") {
+        stack.push({ type: "array", path: valuePathForContainer(parent), key: null, index: 0, expecting: "value" });
+        i += 1;
+        continue;
+      }
+      if (char === "}" || char === "]") {
+        stack.pop();
+        markValueComplete(stack);
+        i += 1;
+        continue;
+      }
+      if (char === ",") {
+        if (parent) {
+          parent.expecting = parent.type === "object" ? "key" : "value";
+        }
+        i += 1;
+        continue;
+      }
+      if (char === ":") {
+        if (parent && parent.type === "object") {
+          parent.expecting = "value";
+        }
+        i += 1;
+        continue;
+      }
+      if (char === '"') {
+        const token = readJsonStringToken(text, i);
+        if (parent && parent.type === "object" && parent.expecting === "key") {
+          parent.key = token.value;
+          parent.expecting = "colon";
+        } else {
+          markValueComplete(stack);
+        }
+        i = token.end;
+        continue;
+      }
+      i = skipJsonLiteral(text, i);
+      markValueComplete(stack);
+    }
+    return currentJsonCursorPath(stack);
+  }
+
+  function buildEditorCursorPath() {
+    if (!state.selectedDocumentId || !els.editorBuffer) {
+      return null;
+    }
+    const offset = Number.isInteger(els.editorBuffer.selectionStart) ? els.editorBuffer.selectionStart : 0;
+    return findJsonPointerNearOffset(els.editorBuffer.value || "", offset);
+  }
+
+  function schedulePresenceCursorUpdate() {
+    if (!state.selectedDocumentId) {
+      return;
+    }
+    if (state.presenceCursorTimer) {
+      window.clearTimeout(state.presenceCursorTimer);
+    }
+    state.presenceCursorTimer = window.setTimeout(() => {
+      state.presenceCursorTimer = null;
+      sendPresenceHeartbeat().catch(() => {});
+    }, 250);
+  }
+
   function buildPresencePayload() {
     if (!state.selectedDocumentId || !state.currentVersion) {
       return null;
@@ -2125,6 +2278,7 @@
       status: state.dirty && caps.can_patch ? "editing" : "viewing",
       base_version: state.baseVersion || state.currentVersion,
       dirty: Boolean(state.dirty),
+      cursor_path: buildEditorCursorPath(),
     };
   }
 
@@ -2157,6 +2311,7 @@
         status: payload.status,
         base_version: payload.base_version,
         dirty: payload.dirty,
+        cursor_path: payload.cursor_path,
       },
     });
   }
@@ -2514,7 +2669,8 @@
       title.textContent = user.display_name || user.actor_id;
       const meta = document.createElement("span");
       meta.className = user.is_stale_base ? "error-text" : "muted";
-      meta.textContent = `${user.status}${user.dirty ? " / dirty" : ""} / base v${user.base_version}`;
+      const cursor = user.cursor_path || user.cursor_path === "" ? ` / at ${user.cursor_path || "/"}` : "";
+      meta.textContent = `${user.status}${user.dirty ? " / dirty" : ""} / base v${user.base_version}${cursor}`;
       row.append(title, meta);
       els.collaborationPanel.appendChild(row);
     }

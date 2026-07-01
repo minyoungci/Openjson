@@ -473,6 +473,12 @@ durable `comment_threads.created_by`, `comment_threads.resolved_by`, and
 `comments.author_id` identifiers while joining `users.display_name` into
 read-only comment payloads for browser readability.
 
+TASK_147 editor cursor presence also adds no table. It reuses
+`editor_presence.cursor_path` as transient JSON Pointer metadata derived by the
+browser from the raw editor cursor position. It does not validate that the path
+currently exists in the latest snapshot and it never becomes canonical document
+history.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

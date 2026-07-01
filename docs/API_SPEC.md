@@ -191,6 +191,8 @@ notifications.
 See `docs/TASK_145_PLAN.md` for human-readable actor display names in
 collaboration and event views.
 See `docs/TASK_146_PLAN.md` for human-readable comment author display names.
+See `docs/TASK_147_PLAN.md` for editor cursor JSON Pointer presence in the
+browser collaboration panel.
 
 ## Deployment Version
 
@@ -493,9 +495,12 @@ retention policy.
 Document collaboration-state is a read-only monitoring surface over active
 editor presence and accepted `document_events` checkpoints. Presence rows are
 transient operational state; they do not alter snapshots or document event
-history. Autosave in the local editor calls the existing content save API, so
-an accepted autosave is a normal append-only `event_type = "update"` document
-event. Accepted HTTP document mutations that leave the document active,
+history. Browser clients may include `cursor_path` as a JSON Pointer describing
+the path near the user's current editor cursor; this path is transient presence
+metadata and is not validated against the current snapshot contents. Autosave
+in the local editor calls the existing content save API, so an accepted
+autosave is a normal append-only `event_type = "update"` document event.
+Accepted HTTP document mutations that leave the document active,
 including `PATCH /documents/{id}`, `PUT /documents/{id}/content`, and
 `POST /documents/{id}/rollback`, broadcast a fresh `collaboration_state` to
 active WebSocket clients for that document after the transaction commits. Failed
