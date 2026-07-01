@@ -23,6 +23,13 @@ def _write_runtime_files(root: Path, *, render_yaml: str | None = None) -> None:
     (root / "requirements.txt").write_text("fastapi==0.135.2\n", encoding="utf-8")
     (root / "scripts" / "smoke_deployment_status.py").write_text("# smoke\n", encoding="utf-8")
     (root / "scripts" / "migrate_db.py").write_text("# migrate\n", encoding="utf-8")
+    (root / "scripts" / "check_replay_consistency.py").write_text("# replay\n", encoding="utf-8")
+    (root / "scripts" / "check_event_chain_integrity.py").write_text("# event chain\n", encoding="utf-8")
+    (root / "scripts" / "check_database_integrity.py").write_text("# integrity\n", encoding="utf-8")
+    (root / "scripts" / "backup_crypto.py").write_text("# backup crypto\n", encoding="utf-8")
+    (root / "scripts" / "backup_sqlite.py").write_text("# backup\n", encoding="utf-8")
+    (root / "scripts" / "restore_sqlite.py").write_text("# restore\n", encoding="utf-8")
+    (root / "scripts" / "backup_restore_drill.py").write_text("# drill\n", encoding="utf-8")
     (root / "render.yaml").write_text(
         render_yaml
         or """
@@ -90,7 +97,30 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(report["summary"]["latest_commit_short"], "abc123")
         self.assertEqual(report["checks"]["git_clean"]["status"], "ok")
         self.assertEqual(report["checks"]["render_blueprint"]["status"], "ok")
+        self.assertIn(
+            "scripts/backup_restore_drill.py",
+            report["checks"]["required_files"]["details"]["required_operation_files"],
+        )
         self.assertIn("release_preflight.py", report["summary"]["next_actions"][0])
+
+    def test_preflight_fails_when_backup_restore_drill_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_runtime_files(root)
+            (root / "scripts" / "backup_restore_drill.py").unlink()
+
+            report = build_release_preflight_report(root, git_runner=_git_runner())
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["checks"]["required_files"]["status"], "failed")
+        self.assertIn(
+            "scripts/backup_restore_drill.py",
+            report["checks"]["required_files"]["details"]["missing"],
+        )
+        self.assertTrue(
+            any("operations files" in action for action in report["summary"]["next_actions"]),
+            report["summary"]["next_actions"],
+        )
 
     def test_preflight_fails_dirty_worktree_before_deploy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

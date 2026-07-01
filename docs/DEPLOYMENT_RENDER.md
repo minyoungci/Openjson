@@ -176,7 +176,10 @@ python scripts\release_preflight.py
 
 The preflight should return `"status": "ok"` before the Render deploy. If it
 reports a dirty worktree, a non-`main` branch, an out-of-sync upstream, missing
-runtime files, or a broken `render.yaml` guard, fix that first.
+runtime or operation files, or a broken `render.yaml` guard, fix that first.
+Operation files include the replay/integrity checks, backup and restore
+scripts, backup encryption helper, and SQLite backup restore drill. See
+`docs/TASK_126_PLAN.md`.
 
 3. Open the Render Blueprint URL:
 

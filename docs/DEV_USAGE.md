@@ -143,6 +143,11 @@ Release preflight before sharing or redeploying:
 python scripts\release_preflight.py
 ```
 
+This verifies the local Git state, Render Blueprint guard settings, deployment
+runtime files, and the operation scripts required for integrity checks,
+backup, restore, and the SQLite backup restore drill. See
+`docs/TASK_122_PLAN.md` and `docs/TASK_126_PLAN.md`.
+
 Derived compacted document snapshots:
 
 ```powershell
@@ -175,7 +180,8 @@ and does not create users, projects, documents, or events. See
 `docs/TASK_114_PLAN.md`, `docs/TASK_115_PLAN.md`, and
 `docs/TASK_116_PLAN.md`. See `docs/TASK_117_PLAN.md` for WebSocket message
 rate limiting and `docs/TASK_121_PLAN.md` for structured failure diagnostics.
-See `docs/TASK_122_PLAN.md` for the release preflight CLI.
+See `docs/TASK_122_PLAN.md` for the release preflight CLI and
+`docs/TASK_126_PLAN.md` for operation-script coverage.
 If the official URL returns `VERSION_ENDPOINT_NOT_FOUND`, the custom domain is
 not yet serving a build that includes `/version`; trigger a manual Render deploy
 from the latest `main` commit and rerun the smoke.

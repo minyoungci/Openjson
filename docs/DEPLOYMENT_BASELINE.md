@@ -143,6 +143,11 @@ The backup restore drill creates a backup, restores it into a temporary
 database, and requires the restored database combined integrity check to pass
 before the drill is considered successful.
 
+`scripts/release_preflight.py` treats these operational scripts as required
+release files, so a deployment preflight fails before deploy if the backup,
+restore, integrity, encryption helper, or restore-drill script is missing. See
+`docs/TASK_126_PLAN.md`.
+
 SQLite backup retention is optional through `--retention-count` or
 `OPENJSON_BACKUP_RETENTION_COUNT`. It prunes only older
 `openjson-backup-*.sqlite3` files and adjacent manifests after a newly created

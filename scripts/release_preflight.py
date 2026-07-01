@@ -20,13 +20,25 @@ CommandRunner = Callable[[list[str], Path], dict[str, Any]]
 DeploymentRunner = Callable[[str, str | None, bool | None], dict[str, Any]]
 
 
-REQUIRED_FILES = (
+REQUIRED_DEPLOYMENT_FILES = (
     "Dockerfile",
     "render.yaml",
     "requirements.txt",
     "scripts/smoke_deployment_status.py",
     "scripts/migrate_db.py",
 )
+
+REQUIRED_OPERATION_FILES = (
+    "scripts/check_replay_consistency.py",
+    "scripts/check_event_chain_integrity.py",
+    "scripts/check_database_integrity.py",
+    "scripts/backup_crypto.py",
+    "scripts/backup_sqlite.py",
+    "scripts/restore_sqlite.py",
+    "scripts/backup_restore_drill.py",
+)
+
+REQUIRED_FILES = (*REQUIRED_DEPLOYMENT_FILES, *REQUIRED_OPERATION_FILES)
 
 REQUIRED_RENDER_SNIPPETS = {
     "docker_runtime": "runtime: docker",
@@ -137,8 +149,10 @@ def _build_required_file_check(repo_root: Path) -> dict[str, Any]:
     missing = [relative for relative in REQUIRED_FILES if not (repo_root / relative).exists()]
     return _check(
         not missing,
-        "Required deployment files are present.",
+        "Required deployment and operations files are present.",
         {
+            "required_deployment_files": list(REQUIRED_DEPLOYMENT_FILES),
+            "required_operation_files": list(REQUIRED_OPERATION_FILES),
             "required_files": list(REQUIRED_FILES),
             "missing": missing,
         },
@@ -215,7 +229,7 @@ def _next_actions(checks: dict[str, Any], *, base_url: str | None, latest_commit
     if checks.get("git_remote", {}).get("status") != "ok":
         actions.append("Verify the origin remote points at https://github.com/minyoungci/Openjson.git.")
     if checks.get("required_files", {}).get("status") != "ok":
-        actions.append("Restore missing deployment files before deploying.")
+        actions.append("Restore missing deployment or operations files before deploying.")
     if checks.get("render_blueprint", {}).get("status") != "ok":
         actions.append("Fix render.yaml before applying or redeploying the Render service.")
 
