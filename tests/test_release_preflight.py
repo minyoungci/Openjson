@@ -114,6 +114,7 @@ class ReleasePreflightTests(unittest.TestCase):
             report["checks"]["required_files"]["details"]["required_operation_files"],
         )
         self.assertIn("expect-backup-scheduler-enabled true", report["summary"]["next_actions"][0])
+        self.assertIn("expect-backup-encryption-key-configured true", report["summary"]["next_actions"][0])
         self.assertIn("release_preflight.py", report["summary"]["next_actions"][0])
 
     def test_preflight_fails_when_backup_restore_drill_is_missing(self) -> None:
@@ -183,6 +184,7 @@ services:
             expect_commit: str | None,
             expect_actor_header_allowed: bool | None,
             expect_backup_scheduler_enabled: bool | None,
+            expect_backup_encryption_key_configured: bool | None,
         ) -> dict[str, Any]:
             captured.update(
                 {
@@ -190,6 +192,7 @@ services:
                     "expect_commit": expect_commit,
                     "expect_actor_header_allowed": expect_actor_header_allowed,
                     "expect_backup_scheduler_enabled": expect_backup_scheduler_enabled,
+                    "expect_backup_encryption_key_configured": expect_backup_encryption_key_configured,
                 }
             )
             return {
@@ -212,6 +215,7 @@ services:
                 base_url="https://openjson.thelumen.work",
                 expect_actor_header_allowed=False,
                 expect_backup_scheduler_enabled=True,
+                expect_backup_encryption_key_configured=True,
                 git_runner=_git_runner(),
                 deployment_runner=deployment_runner,
             )
@@ -220,6 +224,7 @@ services:
         self.assertEqual(captured["expect_commit"], "abc123")
         self.assertFalse(captured["expect_actor_header_allowed"])
         self.assertTrue(captured["expect_backup_scheduler_enabled"])
+        self.assertTrue(captured["expect_backup_encryption_key_configured"])
         self.assertEqual(report["checks"]["deployment_status"]["status"], "failed")
         self.assertEqual(report["checks"]["deployment_status"]["message"], "Deployment status smoke failed.")
         self.assertTrue(

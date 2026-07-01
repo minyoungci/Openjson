@@ -165,7 +165,8 @@ python scripts\smoke_deployment_status.py `
   --base-url https://openjson.thelumen.work `
   --expect-commit <git-sha> `
   --expect-actor-header-allowed false `
-  --expect-backup-scheduler-enabled true
+  --expect-backup-scheduler-enabled true `
+  --expect-backup-encryption-key-configured true
 ```
 
 Or run the combined release/deployment preflight:
@@ -174,7 +175,8 @@ Or run the combined release/deployment preflight:
 python scripts\release_preflight.py `
   --base-url https://openjson.thelumen.work `
   --expect-actor-header-allowed false `
-  --expect-backup-scheduler-enabled true
+  --expect-backup-scheduler-enabled true `
+  --expect-backup-encryption-key-configured true
 ```
 
 This smoke checks `/health`, `/ready`, `/version`, and `/app`. It is read-only
@@ -184,8 +186,9 @@ and does not create users, projects, documents, or events. See
 rate limiting and `docs/TASK_121_PLAN.md` for structured failure diagnostics.
 See `docs/TASK_122_PLAN.md` for the release preflight CLI and
 `docs/TASK_126_PLAN.md` for operation-script coverage. TASK_127 adds
-`--expect-backup-scheduler-enabled true` for the Render daily backup scheduler
-check.
+`--expect-backup-scheduler-enabled true` and
+`--expect-backup-encryption-key-configured true` for the Render daily backup
+scheduler check.
 If the official URL returns `VERSION_ENDPOINT_NOT_FOUND`, the custom domain is
 not yet serving a build that includes `/version`; trigger a manual Render deploy
 from the latest `main` commit and rerun the smoke.

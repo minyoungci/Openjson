@@ -99,6 +99,7 @@ def run_deployment_status_report(
     expect_commit: str | None = None,
     expect_actor_header_allowed: bool | None = None,
     expect_backup_scheduler_enabled: bool | None = None,
+    expect_backup_encryption_key_configured: bool | None = None,
 ) -> dict[str, Any]:
     checks = {
         "health": _probe_get(client, "/health"),
@@ -219,6 +220,20 @@ def run_deployment_status_report(
                         "actual": actual_backup_scheduler_enabled,
                     },
                 )
+        if expect_backup_encryption_key_configured is not None:
+            actual_backup_encryption_key_configured = version["runtime_config"].get(
+                "backup_encryption_key_configured"
+            )
+            if actual_backup_encryption_key_configured is not expect_backup_encryption_key_configured:
+                _add_failure(
+                    diagnostics,
+                    code="BACKUP_ENCRYPTION_KEY_CONFIG_MISMATCH",
+                    message="The deployed backup encryption key configured flag does not match the expected value.",
+                    details={
+                        "expected": expect_backup_encryption_key_configured,
+                        "actual": actual_backup_encryption_key_configured,
+                    },
+                )
 
     app_body = checks["app"].get("body")
     app_text = app_body.get("text", "") if isinstance(app_body, dict) else ""
@@ -251,6 +266,7 @@ def run_deployment_status_smoke(
     expect_commit: str | None = None,
     expect_actor_header_allowed: bool | None = None,
     expect_backup_scheduler_enabled: bool | None = None,
+    expect_backup_encryption_key_configured: bool | None = None,
 ) -> dict[str, Any]:
     health = _response_json(_get(client, "/health"))
     ready = _response_json(_get(client, "/ready"))
@@ -297,6 +313,18 @@ def run_deployment_status_smoke(
             ),
         )
 
+    if expect_backup_encryption_key_configured is not None:
+        actual_backup_encryption_key_configured = version["runtime_config"].get(
+            "backup_encryption_key_configured"
+        )
+        _require(
+            actual_backup_encryption_key_configured is expect_backup_encryption_key_configured,
+            (
+                f"Expected backup_encryption_key_configured={expect_backup_encryption_key_configured}, "
+                f"got {actual_backup_encryption_key_configured!r}"
+            ),
+        )
+
     return {
         "status": "ok",
         "health": health,
@@ -323,6 +351,11 @@ def main() -> None:
         choices=("true", "false"),
         help="Expected /version runtime_config.backup_scheduler_enabled value.",
     )
+    parser.add_argument(
+        "--expect-backup-encryption-key-configured",
+        choices=("true", "false"),
+        help="Expected /version runtime_config.backup_encryption_key_configured value.",
+    )
     args = parser.parse_args()
 
     expected_actor_header_allowed = None
@@ -331,6 +364,9 @@ def main() -> None:
     expected_backup_scheduler_enabled = None
     if args.expect_backup_scheduler_enabled is not None:
         expected_backup_scheduler_enabled = args.expect_backup_scheduler_enabled == "true"
+    expected_backup_encryption_key_configured = None
+    if args.expect_backup_encryption_key_configured is not None:
+        expected_backup_encryption_key_configured = args.expect_backup_encryption_key_configured == "true"
 
     with httpx.Client(base_url=args.base_url.rstrip("/"), timeout=20.0, follow_redirects=True) as client:
         result = run_deployment_status_report(
@@ -338,6 +374,7 @@ def main() -> None:
             expect_commit=args.expect_commit,
             expect_actor_header_allowed=expected_actor_header_allowed,
             expect_backup_scheduler_enabled=expected_backup_scheduler_enabled,
+            expect_backup_encryption_key_configured=expected_backup_encryption_key_configured,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
     if result["status"] != "ok":

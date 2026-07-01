@@ -17,7 +17,7 @@ from scripts.smoke_deployment_status import run_deployment_status_report
 
 
 CommandRunner = Callable[[list[str], Path], dict[str, Any]]
-DeploymentRunner = Callable[[str, str | None, bool | None, bool | None], dict[str, Any]]
+DeploymentRunner = Callable[[str, str | None, bool | None, bool | None, bool | None], dict[str, Any]]
 
 
 REQUIRED_DEPLOYMENT_FILES = (
@@ -204,6 +204,7 @@ def _run_deployment(
     expect_commit: str | None,
     expect_actor_header_allowed: bool | None,
     expect_backup_scheduler_enabled: bool | None,
+    expect_backup_encryption_key_configured: bool | None,
 ) -> dict[str, Any]:
     with httpx.Client(base_url=base_url.rstrip("/"), timeout=20.0, follow_redirects=True) as client:
         return run_deployment_status_report(
@@ -211,6 +212,7 @@ def _run_deployment(
             expect_commit=expect_commit,
             expect_actor_header_allowed=expect_actor_header_allowed,
             expect_backup_scheduler_enabled=expect_backup_scheduler_enabled,
+            expect_backup_encryption_key_configured=expect_backup_encryption_key_configured,
         )
 
 
@@ -219,6 +221,7 @@ def _deployment_check(
     expect_commit: str | None,
     expect_actor_header_allowed: bool | None,
     expect_backup_scheduler_enabled: bool | None,
+    expect_backup_encryption_key_configured: bool | None,
     deployment_runner: DeploymentRunner,
 ) -> dict[str, Any]:
     try:
@@ -227,6 +230,7 @@ def _deployment_check(
             expect_commit,
             expect_actor_header_allowed,
             expect_backup_scheduler_enabled,
+            expect_backup_encryption_key_configured,
         )
     except Exception as exc:  # pragma: no cover - depends on external network failures
         return _check(
@@ -276,7 +280,7 @@ def _next_actions(checks: dict[str, Any], *, base_url: str | None, latest_commit
             "After the manual Render deploy, run: "
             f"python scripts\\release_preflight.py --base-url https://openjson.thelumen.work "
             f"--expect-commit {commit_flag} --expect-actor-header-allowed false "
-            "--expect-backup-scheduler-enabled true"
+            "--expect-backup-scheduler-enabled true --expect-backup-encryption-key-configured true"
         )
 
     return actions
@@ -289,6 +293,7 @@ def build_release_preflight_report(
     expect_commit: str | None = None,
     expect_actor_header_allowed: bool | None = None,
     expect_backup_scheduler_enabled: bool | None = None,
+    expect_backup_encryption_key_configured: bool | None = None,
     git_runner: CommandRunner = _run_command,
     deployment_runner: DeploymentRunner = _run_deployment,
 ) -> dict[str, Any]:
@@ -309,6 +314,7 @@ def build_release_preflight_report(
             effective_expect_commit,
             expect_actor_header_allowed,
             expect_backup_scheduler_enabled,
+            expect_backup_encryption_key_configured,
             deployment_runner,
         )
 
@@ -328,6 +334,7 @@ def build_release_preflight_report(
             "expected_deployed_commit": effective_expect_commit,
             "expected_actor_header_allowed": expect_actor_header_allowed,
             "expected_backup_scheduler_enabled": expect_backup_scheduler_enabled,
+            "expected_backup_encryption_key_configured": expect_backup_encryption_key_configured,
             "next_actions": next_actions,
         },
     }
@@ -348,6 +355,11 @@ def main() -> None:
         choices=("true", "false"),
         help="Expected /version runtime_config.backup_scheduler_enabled value for the deployment smoke.",
     )
+    parser.add_argument(
+        "--expect-backup-encryption-key-configured",
+        choices=("true", "false"),
+        help="Expected /version runtime_config.backup_encryption_key_configured value for the deployment smoke.",
+    )
     args = parser.parse_args()
 
     expected_actor_header_allowed = None
@@ -356,6 +368,9 @@ def main() -> None:
     expected_backup_scheduler_enabled = None
     if args.expect_backup_scheduler_enabled is not None:
         expected_backup_scheduler_enabled = args.expect_backup_scheduler_enabled == "true"
+    expected_backup_encryption_key_configured = None
+    if args.expect_backup_encryption_key_configured is not None:
+        expected_backup_encryption_key_configured = args.expect_backup_encryption_key_configured == "true"
 
     report = build_release_preflight_report(
         args.repo_root,
@@ -363,6 +378,7 @@ def main() -> None:
         expect_commit=args.expect_commit,
         expect_actor_header_allowed=expected_actor_header_allowed,
         expect_backup_scheduler_enabled=expected_backup_scheduler_enabled,
+        expect_backup_encryption_key_configured=expected_backup_encryption_key_configured,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     if report["status"] != "ok":

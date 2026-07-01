@@ -60,7 +60,8 @@ python scripts\release_preflight.py `
   --base-url https://openjson.thelumen.work `
   --expect-commit <git-sha> `
   --expect-actor-header-allowed false `
-  --expect-backup-scheduler-enabled true
+  --expect-backup-scheduler-enabled true `
+  --expect-backup-encryption-key-configured true
 ```
 
 ## Exclusions

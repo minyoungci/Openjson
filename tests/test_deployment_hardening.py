@@ -437,6 +437,7 @@ class DeploymentHardeningTests(unittest.TestCase):
                 expect_commit="smoke",
                 expect_actor_header_allowed=False,
                 expect_backup_scheduler_enabled=True,
+                expect_backup_encryption_key_configured=True,
             )
 
         self.assertEqual(result["status"], "ok")
@@ -572,6 +573,53 @@ class DeploymentHardeningTests(unittest.TestCase):
         self.assertEqual(
             [diagnostic["code"] for diagnostic in result["diagnostics"]],
             ["BACKUP_SCHEDULER_CONFIG_MISMATCH"],
+        )
+
+    def test_deployment_status_report_detects_backup_key_mismatch(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/health":
+                return httpx.Response(200, json={"status": "ok", "service": "openjson-api"})
+            if request.url.path == "/ready":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ready",
+                        "database": {
+                            "migrations": {
+                                "status": "ok",
+                            },
+                        },
+                    },
+                )
+            if request.url.path == "/version":
+                return httpx.Response(
+                    200,
+                    json={
+                        "service": "openjson-api",
+                        "source": {
+                            "git_commit": "abc123",
+                        },
+                        "runtime_config": {
+                            "actor_header_allowed": False,
+                            "backup_scheduler_enabled": True,
+                            "backup_encryption_key_configured": False,
+                        },
+                    },
+                )
+            return httpx.Response(200, headers={"content-type": "text/html"}, text="<title>OpenJson</title>")
+
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport, base_url="https://openjson.example") as client:
+            result = run_deployment_status_report(
+                client,
+                expect_backup_scheduler_enabled=True,
+                expect_backup_encryption_key_configured=True,
+            )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(
+            [diagnostic["code"] for diagnostic in result["diagnostics"]],
+            ["BACKUP_ENCRYPTION_KEY_CONFIG_MISMATCH"],
         )
 
 
