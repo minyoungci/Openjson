@@ -678,13 +678,30 @@ textarea:focus {
 }
 
 .event-row,
-.change-row {
+.change-row,
+.comment-thread {
   display: grid;
   gap: 4px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #ffffff;
+}
+
+.comment-thread-header,
+.comment-message {
+  display: grid;
+  gap: 4px;
+}
+
+.comment-thread-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.comment-thread textarea {
+  min-height: 60px;
+  resize: vertical;
 }
 
 .schema-row {

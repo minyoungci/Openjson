@@ -117,6 +117,8 @@ See `docs/TASK_107_PLAN.md` for invitation email delivery status rendering.
 See `docs/TASK_108_PLAN.md` for full invite-link display and copy controls.
 See `docs/TASK_109_PLAN.md` for invite-link signup/login auto-accept
 onboarding.
+See `docs/TASK_110_PLAN.md` for the local Notes panel over existing comment
+thread APIs.
 
 ## Bootstrap, Workspace, Project
 

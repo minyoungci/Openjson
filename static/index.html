@@ -346,6 +346,37 @@
             <div id="collaborationPanel" class="dense-output"></div>
           </section>
 
+          <section class="panel notes-panel">
+            <div class="panel-heading">
+              <h2>Notes</h2>
+              <button id="commentsButton" class="icon-button" type="button" title="Refresh notes" aria-label="Refresh notes">
+                <svg><use href="#icon-refresh"></use></svg>
+              </button>
+            </div>
+            <label class="stacked-label">
+              Anchor
+              <select id="commentAnchorTypeSelect">
+                <option value="document">Document</option>
+                <option value="path">JSON path</option>
+                <option value="event">Change event</option>
+              </select>
+            </label>
+            <label id="commentPathField" class="stacked-label comment-anchor-field hidden">
+              JSON Pointer
+              <input id="commentPathInput" autocomplete="off" placeholder="/model/name" />
+            </label>
+            <label id="commentEventField" class="stacked-label comment-anchor-field hidden">
+              Event ID
+              <input id="commentEventIdInput" autocomplete="off" placeholder="evt_..." />
+            </label>
+            <label class="stacked-label">
+              Note
+              <textarea id="commentBodyInput" rows="3" placeholder="Leave a note for this document"></textarea>
+            </label>
+            <button id="createCommentThreadButton" class="secondary-button full-width" type="button">Add Note</button>
+            <div id="commentsPanel" class="dense-output"></div>
+          </section>
+
           <section class="panel">
             <div class="panel-heading">
               <h2>Conflict</h2>

@@ -56,6 +56,8 @@ Realtime collaboration is based on accepted checkpoints.
 Notes are stored as comment threads and comments, not inside the JSON snapshot.
 
 - A thread can be attached to a document, JSON path, or change context.
+- The Notes panel lists threads for the selected document and can add replies,
+  resolve threads, or reopen resolved threads.
 - Adding, resolving, or reopening a note changes comment data only.
 - JSON document versions change only when an accepted document mutation creates
   a new document event.

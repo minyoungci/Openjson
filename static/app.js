@@ -80,6 +80,15 @@
     validationPanel: $("validationPanel"),
     schemaPanel: $("schemaPanel"),
     collaborationPanel: $("collaborationPanel"),
+    commentsButton: $("commentsButton"),
+    commentsPanel: $("commentsPanel"),
+    commentAnchorType: $("commentAnchorTypeSelect"),
+    commentPathField: $("commentPathField"),
+    commentPath: $("commentPathInput"),
+    commentEventField: $("commentEventField"),
+    commentEventId: $("commentEventIdInput"),
+    commentBody: $("commentBodyInput"),
+    createCommentThreadButton: $("createCommentThreadButton"),
     conflictPanel: $("conflictPanel"),
     conflictActions: $("conflictActions"),
     conflictReloadButton: $("conflictReloadButton"),
@@ -113,6 +122,7 @@
     schemaListError: null,
     projectMembers: [],
     memberListError: null,
+    commentThreads: [],
     createSchemaMatch: null,
     schemaMatchTimer: null,
     zipFile: null,
@@ -172,6 +182,7 @@
     if (state.pendingInviteToken) {
       els.projectInviteToken.value = state.pendingInviteToken;
     }
+    syncCommentAnchorControls();
     bindEvents();
     syncButtons();
     initializeEntry().catch((error) => showGlobalError(error));
@@ -390,6 +401,35 @@
 
     els.rollbackButton.addEventListener("click", () => {
       rollbackSelected().catch((error) => renderError(els.rollbackPanel, error));
+    });
+
+    els.commentsButton.addEventListener("click", () => {
+      loadCommentThreads().catch((error) => renderError(els.commentsPanel, error));
+    });
+
+    els.commentAnchorType.addEventListener("change", () => {
+      syncCommentAnchorControls();
+      syncButtons();
+    });
+
+    els.commentPath.addEventListener("input", () => {
+      syncButtons();
+    });
+
+    els.commentEventId.addEventListener("input", () => {
+      syncButtons();
+    });
+
+    els.commentBody.addEventListener("input", () => {
+      syncButtons();
+    });
+
+    els.createCommentThreadButton.addEventListener("click", () => {
+      createCommentThread().catch((error) => renderError(els.commentsPanel, error));
+    });
+
+    els.commentsPanel.addEventListener("click", (event) => {
+      handleCommentsPanelClick(event).catch((error) => renderError(els.commentsPanel, error));
     });
 
     els.conflictReloadButton.addEventListener("click", () => {
@@ -1063,6 +1103,7 @@
     renderSchema(editorState.schema);
     renderValidation(editorState.validation);
     clearPanel(els.collaborationPanel, "Loading collaboration state...");
+    clearPanel(els.commentsPanel, "Loading notes...");
     renderRecentEvents(editorState.recent_events || []);
     clearPanel(els.diffPanel, "No diff loaded");
     clearPanel(els.conflictPanel, "No conflict");
@@ -1072,6 +1113,7 @@
     if (state.liveTextEnabled) {
       joinLiveTextSession();
     }
+    loadCommentThreads().catch((error) => renderError(els.commentsPanel, error));
     setEditorStatus("Document loaded.", "ok");
   }
 
@@ -1083,6 +1125,7 @@
     state.liveTextRevision = 0;
     state.baseVersion = null;
     state.currentVersion = null;
+    state.commentThreads = [];
     localStorage.removeItem("openjson.selectedDocumentId");
     updateBrowserUrl();
     els.editorBuffer.value = "";
@@ -1096,6 +1139,7 @@
     clearPanel(els.diffPanel, "No diff loaded");
     clearPanel(els.rollbackPanel, "No rollback");
     clearPanel(els.collaborationPanel, "No active document.");
+    clearPanel(els.commentsPanel, "No document selected.");
     stopCollaborationLoop();
     setEditorStatus("Load or create a document.", "info");
   }
@@ -1353,6 +1397,221 @@
     });
     renderText(els.rollbackPanel, `Rollback event ${result.event_id} created.`, "ok-text");
     await loadBootstrap(state.selectedDocumentId);
+  }
+
+  async function loadCommentThreads() {
+    if (!state.selectedDocumentId) {
+      state.commentThreads = [];
+      clearPanel(els.commentsPanel, "No document selected.");
+      return;
+    }
+    const documentId = state.selectedDocumentId;
+    clearPanel(els.commentsPanel, "Loading notes...");
+    const result = await apiFetch(`/documents/${encodeURIComponent(documentId)}/comment-threads`);
+    if (documentId !== state.selectedDocumentId) {
+      return;
+    }
+    state.commentThreads = result.threads || [];
+    renderCommentThreads();
+  }
+
+  async function createCommentThread() {
+    if (!state.selectedDocumentId) {
+      return;
+    }
+    const body = cleanOptional(els.commentBody.value);
+    if (!body) {
+      renderText(els.commentsPanel, "Note body is required.", "error-text");
+      return;
+    }
+    const anchorType = els.commentAnchorType.value;
+    const payload = {
+      body,
+      anchor_type: anchorType,
+    };
+    if (anchorType === "path") {
+      payload.path = cleanOptional(els.commentPath.value);
+    } else if (anchorType === "event") {
+      payload.event_id = cleanOptional(els.commentEventId.value);
+    }
+    await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/comment-threads`, {
+      method: "POST",
+      body: payload,
+    });
+    els.commentBody.value = "";
+    await loadCommentThreads();
+    setEditorStatus("Note added.", "ok");
+    syncButtons();
+  }
+
+  async function addCommentReply(threadId) {
+    const input = findReplyInput(threadId);
+    const body = input ? cleanOptional(input.value) : "";
+    if (!body) {
+      renderText(els.commentsPanel, "Reply body is required.", "error-text");
+      return;
+    }
+    await apiFetch(`/comment-threads/${encodeURIComponent(threadId)}/comments`, {
+      method: "POST",
+      body: { body },
+    });
+    await loadCommentThreads();
+    setEditorStatus("Reply added.", "ok");
+  }
+
+  async function setCommentThreadStatus(threadId, action) {
+    const path =
+      action === "resolve"
+        ? `/comment-threads/${encodeURIComponent(threadId)}/resolve`
+        : `/comment-threads/${encodeURIComponent(threadId)}/reopen`;
+    await apiFetch(path, {
+      method: "POST",
+    });
+    await loadCommentThreads();
+    setEditorStatus(action === "resolve" ? "Note resolved." : "Note reopened.", "ok");
+  }
+
+  async function handleCommentsPanelClick(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const addButton = target.closest("[data-add-comment]");
+    if (addButton) {
+      const threadId = addButton.getAttribute("data-add-comment");
+      if (threadId) {
+        await addCommentReply(threadId);
+      }
+      return;
+    }
+    const resolveButton = target.closest("[data-resolve-thread]");
+    if (resolveButton) {
+      const threadId = resolveButton.getAttribute("data-resolve-thread");
+      if (threadId) {
+        await setCommentThreadStatus(threadId, "resolve");
+      }
+      return;
+    }
+    const reopenButton = target.closest("[data-reopen-thread]");
+    if (reopenButton) {
+      const threadId = reopenButton.getAttribute("data-reopen-thread");
+      if (threadId) {
+        await setCommentThreadStatus(threadId, "reopen");
+      }
+    }
+  }
+
+  function findReplyInput(threadId) {
+    const inputs = els.commentsPanel.querySelectorAll("[data-comment-reply]");
+    for (const input of inputs) {
+      if (input instanceof HTMLTextAreaElement && input.dataset.commentReply === threadId) {
+        return input;
+      }
+    }
+    return null;
+  }
+
+  function syncCommentAnchorControls() {
+    const anchorType = els.commentAnchorType.value;
+    els.commentPathField.classList.toggle("hidden", anchorType !== "path");
+    els.commentEventField.classList.toggle("hidden", anchorType !== "event");
+  }
+
+  function renderCommentThreads() {
+    clear(els.commentsPanel);
+    const openCount = state.commentThreads.filter((thread) => thread.status !== "resolved").length;
+    const summary = document.createElement("div");
+    summary.className = "chip-row left";
+    summary.appendChild(chip(`${state.commentThreads.length} thread(s)`, "info"));
+    summary.appendChild(chip(`${openCount} open`, openCount ? "warn" : "ok"));
+    els.commentsPanel.appendChild(summary);
+
+    if (!state.commentThreads.length) {
+      renderText(els.commentsPanel, "No notes yet.", "muted");
+      return;
+    }
+
+    const canComment = Boolean(
+      state.selectedEditorState &&
+        state.selectedEditorState.editor &&
+        state.selectedEditorState.editor.capabilities &&
+        state.selectedEditorState.editor.capabilities.can_comment
+    );
+    for (const thread of state.commentThreads) {
+      els.commentsPanel.appendChild(renderCommentThread(thread, canComment));
+    }
+  }
+
+  function renderCommentThread(thread, canComment) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "comment-thread";
+
+    const header = document.createElement("div");
+    header.className = "comment-thread-header";
+    const title = document.createElement("strong");
+    title.textContent = threadAnchorLabel(thread);
+    const status = chip(thread.status || "open", thread.status === "resolved" ? "ok" : "warn");
+    header.append(title, status);
+    wrapper.appendChild(header);
+
+    const meta = document.createElement("span");
+    meta.className = "muted";
+    meta.textContent = `${thread.created_by} / ${thread.created_at}`;
+    wrapper.appendChild(meta);
+
+    for (const comment of thread.comments || []) {
+      const row = document.createElement("div");
+      row.className = "comment-message";
+      const body = document.createElement("div");
+      body.textContent = comment.body;
+      const detail = document.createElement("span");
+      detail.className = "muted";
+      detail.textContent = `${comment.author_id} / ${comment.created_at}`;
+      row.append(body, detail);
+      wrapper.appendChild(row);
+    }
+
+    if (canComment) {
+      const reply = document.createElement("textarea");
+      reply.rows = 2;
+      reply.placeholder = "Reply";
+      reply.dataset.commentReply = thread.id;
+      wrapper.appendChild(reply);
+
+      const actions = document.createElement("div");
+      actions.className = "button-row compact-row";
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "secondary-button";
+      addButton.dataset.addComment = thread.id;
+      addButton.textContent = "Reply";
+      actions.appendChild(addButton);
+
+      const statusButton = document.createElement("button");
+      statusButton.type = "button";
+      statusButton.className = "secondary-button";
+      if (thread.status === "resolved") {
+        statusButton.dataset.reopenThread = thread.id;
+        statusButton.textContent = "Reopen";
+      } else {
+        statusButton.dataset.resolveThread = thread.id;
+        statusButton.textContent = "Resolve";
+      }
+      actions.appendChild(statusButton);
+      wrapper.appendChild(actions);
+    }
+
+    return wrapper;
+  }
+
+  function threadAnchorLabel(thread) {
+    if (thread.anchor_type === "path") {
+      return `Path ${thread.path || ""}`;
+    }
+    if (thread.anchor_type === "event") {
+      return `Event ${thread.event_id || ""}`;
+    }
+    return "Document";
   }
 
   function updateSyntaxState() {
@@ -1691,6 +1950,11 @@
     const canPreview = Boolean(caps.can_patch_preview);
     const canValidate = Boolean(caps.can_validate);
     const canRollback = Boolean(caps.can_rollback);
+    const canComment = Boolean(caps.can_comment);
+    const commentAnchorType = els.commentAnchorType.value;
+    const missingCommentAnchor =
+      (commentAnchorType === "path" && !cleanOptional(els.commentPath.value)) ||
+      (commentAnchorType === "event" && !cleanOptional(els.commentEventId.value));
     const ambiguousSchema =
       state.createSchemaMatch &&
       state.createSchemaMatch.resolution &&
@@ -1726,6 +1990,13 @@
     els.historyButton.disabled = busy || !hasDoc;
     els.diffButton.disabled = busy || !hasDoc;
     els.rollbackButton.disabled = busy || !hasDoc || !canRollback;
+    els.commentsButton.disabled = busy || !hasDoc;
+    els.commentAnchorType.disabled = busy || !hasDoc || !canComment;
+    els.commentPath.disabled = busy || !hasDoc || !canComment;
+    els.commentEventId.disabled = busy || !hasDoc || !canComment;
+    els.commentBody.disabled = busy || !hasDoc || !canComment;
+    els.createCommentThreadButton.disabled =
+      busy || !hasDoc || !canComment || !cleanOptional(els.commentBody.value) || missingCommentAnchor;
   }
 
   function renderSchemaOptions() {
