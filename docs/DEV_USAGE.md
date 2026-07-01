@@ -143,6 +143,16 @@ Release preflight before sharing or redeploying:
 python scripts\release_preflight.py
 ```
 
+Derived compacted document snapshots:
+
+```powershell
+$env:OPENJSON_DB_PATH = "D:\OpenJson\openjson.sqlite3"
+python scripts\compact_document_snapshots.py
+```
+
+This writes immutable `document_snapshots` rows only after the event replay
+invariant is verified. It does not delete or rewrite `document_events`.
+
 For the official URL after a manual Render deploy:
 
 ```powershell

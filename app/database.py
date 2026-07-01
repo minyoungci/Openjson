@@ -27,6 +27,7 @@ KNOWN_SCHEMA_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("0013_editor_presence", "Document editor presence and checkpoint monitoring baseline."),
     ("0014_sessions_invitations", "Password sessions and project invitations baseline."),
     ("0015_deployment_collaboration_auth_sync", "Collaborative text, email delivery, refresh tokens, OIDC, and offline sync baseline."),
+    ("0016_document_snapshots", "Derived compacted document snapshot baseline."),
 )
 
 
@@ -312,6 +313,20 @@ CREATE TABLE IF NOT EXISTS document_events (
 CREATE INDEX IF NOT EXISTS idx_document_events_document_version
 ON document_events(document_id, result_version);
 
+CREATE TABLE IF NOT EXISTS document_snapshots (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES json_documents(id),
+    version INTEGER NOT NULL CHECK (version > 0),
+    snapshot_json TEXT NOT NULL,
+    source_event_id TEXT NOT NULL REFERENCES document_events(id),
+    created_at TEXT NOT NULL,
+    UNIQUE(document_id, version),
+    UNIQUE(source_event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_snapshots_document_version
+ON document_snapshots(document_id, version DESC);
+
 CREATE TABLE IF NOT EXISTS editor_presence (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL REFERENCES json_documents(id),
@@ -431,6 +446,18 @@ CREATE TRIGGER IF NOT EXISTS trg_document_events_no_delete
 BEFORE DELETE ON document_events
 BEGIN
     SELECT RAISE(ABORT, 'document_events is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_document_snapshots_no_update
+BEFORE UPDATE ON document_snapshots
+BEGIN
+    SELECT RAISE(ABORT, 'document_snapshots are immutable derived artifacts');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_document_snapshots_no_delete
+BEFORE DELETE ON document_snapshots
+BEGIN
+    SELECT RAISE(ABORT, 'document_snapshots are immutable derived artifacts');
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_schemas_no_update

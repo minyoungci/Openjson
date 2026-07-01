@@ -37,6 +37,7 @@ the current implementation.
 - `offline_sync_operations`
 - `json_documents`
 - `document_events`
+- `document_snapshots`
 - `editor_presence`
 - `schemas`
 - `comment_threads`
@@ -64,6 +65,9 @@ the current implementation.
 - `json_documents(project_id, full_path)` is unique for non-deleted documents
   through a partial unique index.
 - `document_events(document_id, result_version)` is unique.
+- `document_snapshots(document_id, version)` is unique.
+- `document_snapshots.source_event_id` is unique and references
+  `document_events(id)`.
 - `editor_presence(document_id, actor_id)` is unique.
 - `review_request_changes(review_request_id, document_id)` is unique.
 - `audit_log(project_id, created_at, id)` is indexed for project-scoped reads.
@@ -75,6 +79,7 @@ the current implementation.
 Append-only or immutable behavior is enforced with SQLite triggers:
 
 - `document_events`: no update, no delete
+- `document_snapshots`: no update, no delete
 - `schemas`: no update, no delete
 - `comments`: no update, no delete
 - `review_decisions`: no update, no delete
@@ -142,6 +147,14 @@ auditability.
 
 The project document event feed is a read-only API view over `document_events`
 joined to `json_documents`; it does not introduce a separate event store.
+
+`document_snapshots` stores immutable compacted snapshots derived from
+`document_events`. It is a replay acceleration artifact, not a replacement
+source of truth. Snapshot compaction first verifies that replaying the full
+event chain to `json_documents.current_version` reconstructs
+`json_documents.current_snapshot_json`; if the invariant fails, compaction
+writes nothing. Existing compacted snapshots are treated as idempotent only
+when their stored JSON and `source_event_id` still match event-log replay.
 
 The document event detail API is a read-only view over one `document_events`
 row joined through its `json_documents` parent. Optional before/after snapshots

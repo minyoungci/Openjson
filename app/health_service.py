@@ -27,6 +27,7 @@ REQUIRED_TABLES = {
     "offline_sync_operations",
     "json_documents",
     "document_events",
+    "document_snapshots",
     "schemas",
     "comment_threads",
     "comments",
