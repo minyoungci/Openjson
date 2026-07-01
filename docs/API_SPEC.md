@@ -268,6 +268,8 @@ replacement.
 See `docs/TASK_177_PLAN.md` for preventing stale browser save failures from
 enqueueing old content into the offline sync queue after document or editor
 context changes.
+See `docs/TASK_178_PLAN.md` for refreshing expired browser sessions for binary
+ZIP upload requests before surfacing 401 failures.
 
 ## Deployment Version
 

@@ -621,6 +621,11 @@ still the active document, base version, and editor buffer. This prevents old
 content from being replayed later by offline sync after document switches or
 local edits. It does not alter backend offline-sync storage, idempotency,
 permissions, canonical snapshots, or append-only `document_events`.
+TASK_178 binary API refresh handling also adds no table. The static browser
+client applies the same one-time refresh-token retry policy to binary ZIP
+upload requests that JSON API calls already use. This does not change
+refresh-token storage, ZIP import transactions, import artifacts, permissions,
+canonical snapshots, or append-only `document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

@@ -243,6 +243,14 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function resetZipImportSelection(message)", js.text)
         self.assertIn("state.zipPreviewing = false", js.text)
         self.assertIn("state.zipApplying = false", js.text)
+        binary_fetch = js.text.split("async function apiFetchBinary(path, options)", 1)[1].split(
+            "function handleMutationError", 1
+        )[0]
+        self.assertIn("const includeAuth = !(options && options.auth === false)", binary_fetch)
+        self.assertIn("if (includeAuth && state.token)", binary_fetch)
+        self.assertIn("response.status === 401 && state.refreshToken && includeAuth && !(options && options.retrying)", binary_fetch)
+        self.assertIn("const refreshed = await refreshAccessToken()", binary_fetch)
+        self.assertIn("return apiFetchBinary(path, { ...(options || {}), retrying: true })", binary_fetch)
         self.assertIn("state.authenticating", js.text)
         self.assertIn("state.loggingOut", js.text)
         self.assertIn("state.refreshingSession", js.text)

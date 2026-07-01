@@ -4214,6 +4214,7 @@
 
   async function apiFetchBinary(path, options) {
     const method = options && options.method ? options.method : "POST";
+    const includeAuth = !(options && options.auth === false);
     const url = new URL(path, window.location.origin);
     const query = options && options.query ? options.query : {};
     for (const [key, value] of Object.entries(query)) {
@@ -4225,10 +4226,16 @@
       Accept: "application/json",
       "Content-Type": (options && options.contentType) || "application/octet-stream",
     };
-    if (state.token) {
+    if (includeAuth && state.token) {
       headers.Authorization = `Bearer ${state.token}`;
     }
     const response = await fetch(url, { method, headers, body: options ? options.body : undefined });
+    if (response.status === 401 && state.refreshToken && includeAuth && !(options && options.retrying)) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return apiFetchBinary(path, { ...(options || {}), retrying: true });
+      }
+    }
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) {
