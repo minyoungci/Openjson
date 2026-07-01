@@ -485,6 +485,13 @@ selected document id, and deletes that presence row when switching documents or
 stopping collaboration. Stale rows can still age out through the existing
 presence timeout when a client disappears abruptly.
 
+TASK_149 HTTP presence WebSocket broadcast also adds no table. Successful
+HTTP presence heartbeat and leave calls update or delete the existing
+`editor_presence` row, derive a fresh `collaboration_state`, and publish it to
+active document WebSocket clients. These payloads are operational notifications
+only and do not mutate canonical JSON snapshots or append-only
+`document_events`.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

@@ -1046,12 +1046,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
         )
 
     @application.post("/documents/{document_id}/presence")
-    def upsert_editor_presence_endpoint(
+    async def upsert_editor_presence_endpoint(
         document_id: str,
         request: EditorPresenceRequest,
         actor_id: ActorHeader = None,
     ) -> dict:
-        return upsert_editor_presence(
+        state = upsert_editor_presence(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
@@ -1060,14 +1060,26 @@ def create_app(db_path: str | None = None) -> FastAPI:
             dirty=request.dirty,
             cursor_path=request.cursor_path,
         )
+        await collaboration_hub.broadcast_state(
+            document_id,
+            state,
+            reason="presence",
+        )
+        return state
 
     @application.delete("/documents/{document_id}/presence")
-    def leave_editor_presence_endpoint(document_id: str, actor_id: ActorHeader = None) -> dict:
-        return leave_editor_presence(
+    async def leave_editor_presence_endpoint(document_id: str, actor_id: ActorHeader = None) -> dict:
+        state = leave_editor_presence(
             application.state.db_path,
             document_id=document_id,
             actor_id=actor_id,
         )
+        await collaboration_hub.broadcast_state(
+            document_id,
+            state,
+            reason="leave",
+        )
+        return state
 
     @application.websocket("/ws/documents/{document_id}/collaboration")
     async def document_collaboration_websocket(

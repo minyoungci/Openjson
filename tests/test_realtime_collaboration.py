@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from app.comment_service import create_comment_thread
+from app.collaboration_service import upsert_editor_presence
 from app.database import connect, init_db, utc_now
 from app.document_service import create_document, patch_document
 from app.errors import AppError, ErrorCode
@@ -213,6 +214,58 @@ class RealtimeCollaborationTests(unittest.TestCase):
         self.assertIn(self.editor_id, active)
         self.assertEqual(active[self.editor_id]["status"], "editing")
         self.assertEqual(active[self.editor_id]["cursor_path"], "/learning_rate")
+
+    def test_http_presence_endpoint_broadcasts_state_to_websocket_clients(self) -> None:
+        with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:
+            websocket.receive_json()
+            response = self.client.post(
+                f"/documents/{self.document['id']}/presence",
+                headers={"X-Actor-Id": self.editor_id},
+                json={
+                    "status": "editing",
+                    "base_version": 1,
+                    "dirty": True,
+                    "cursor_path": "/learning_rate",
+                },
+            )
+            message = websocket.receive_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(message["type"], "collaboration_state")
+        self.assertEqual(message["reason"], "presence")
+        active = {user["actor_id"]: user for user in message["state"]["active_users"]}
+        self.assertIn(self.editor_id, active)
+        self.assertEqual(active[self.editor_id]["display_name"], "Editor")
+        self.assertEqual(active[self.editor_id]["status"], "editing")
+        self.assertEqual(active[self.editor_id]["dirty"], True)
+        self.assertEqual(active[self.editor_id]["cursor_path"], "/learning_rate")
+
+    def test_http_presence_leave_broadcasts_state_to_websocket_clients(self) -> None:
+        upsert_editor_presence(
+            self.db_path,
+            document_id=self.document["id"],
+            actor_id=self.editor_id,
+            status="editing",
+            base_version=1,
+            dirty=True,
+            cursor_path="/learning_rate",
+        )
+
+        with self.client.websocket_connect(self._ws_path(self.viewer_id)) as websocket:
+            initial = websocket.receive_json()
+            response = self.client.delete(
+                f"/documents/{self.document['id']}/presence",
+                headers={"X-Actor-Id": self.editor_id},
+            )
+            message = websocket.receive_json()
+
+        initial_active = {user["actor_id"]: user for user in initial["state"]["active_users"]}
+        self.assertIn(self.editor_id, initial_active)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(message["type"], "collaboration_state")
+        self.assertEqual(message["reason"], "leave")
+        active = {user["actor_id"]: user for user in message["state"]["active_users"]}
+        self.assertNotIn(self.editor_id, active)
 
     def test_hub_broadcast_sends_to_all_registered_sockets(self) -> None:
         async def scenario() -> tuple[FakeWebSocket, FakeWebSocket]:

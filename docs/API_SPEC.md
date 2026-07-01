@@ -195,6 +195,8 @@ See `docs/TASK_147_PLAN.md` for editor cursor JSON Pointer presence in the
 browser collaboration panel.
 See `docs/TASK_148_PLAN.md` for explicit browser presence leave on document
 switch and page unload.
+See `docs/TASK_149_PLAN.md` for HTTP presence heartbeat and leave broadcasts
+over the document WebSocket channel.
 
 ## Deployment Version
 
@@ -506,6 +508,10 @@ The browser sends an explicit presence leave for the previously active
 document when switching documents, closing the page, or stopping its
 collaboration loop, so peers do not need to wait for the presence timeout in
 normal navigation flows.
+Successful HTTP presence heartbeat and leave calls also broadcast a fresh
+`collaboration_state` to active WebSocket clients for that document, so
+browser polling fallback updates and explicit leaves are visible to peers
+without waiting for the next manual refresh or timeout.
 Accepted HTTP document mutations that leave the document active,
 including `PATCH /documents/{id}`, `PUT /documents/{id}/content`, and
 `POST /documents/{id}/rollback`, broadcast a fresh `collaboration_state` to
