@@ -324,6 +324,11 @@ restore, rollback, and ZIP import writes; it does not rewrite historical
 `document_events`, account for deleted historical event-log bytes, or implement
 billing quotas.
 
+TASK_120 SQLite backup retention adds no table. It is local filesystem
+operational state for `scripts/backup_sqlite.py` and does not mutate
+`json_documents`, `document_events`, schema migrations, audit rows, or
+canonical JSON content.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and

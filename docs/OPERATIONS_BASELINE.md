@@ -124,6 +124,18 @@ The command writes:
 The backup command does not initialize or migrate the source database. The
 source database must already exist.
 
+Optional retention:
+
+```powershell
+python scripts\backup_sqlite.py --db-path "D:\OpenJson\openjson.sqlite3" --output-dir "D:\OpenJson\backups" --retention-count 7
+```
+
+`OPENJSON_BACKUP_RETENTION_COUNT` may be used as the default retention count.
+Retention applies only to `openjson-backup-*.sqlite3` files in the selected
+output directory and deletes adjacent manifest files for pruned backups. It
+runs only when the newly created backup's combined integrity status is `ok`;
+failed-integrity backups skip pruning so older known backups remain available.
+
 ## SQLite MVP Restore
 
 Restore a backup:
@@ -144,7 +156,9 @@ continues for backward compatibility.
 ## Boundaries
 
 - Backup encryption is not implemented.
-- Backup retention and scheduling are not implemented.
+- Backup scheduling is not implemented.
+- Backup retention is local filesystem retention only; there is no managed
+  remote object storage lifecycle policy.
 - PostgreSQL backup/restore is a future task.
 - Centralized logs, metrics, traces, and alerting are future tasks.
 - Replay consistency checks are read-only and do not repair corrupted data.

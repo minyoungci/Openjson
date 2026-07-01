@@ -138,4 +138,9 @@ Restore verifies adjacent backup manifest hashes when a manifest is present.
 Malformed manifests fail before target DB creation; missing manifests are
 reported and allowed for backward compatibility.
 
+SQLite backup retention is optional through `--retention-count` or
+`OPENJSON_BACKUP_RETENTION_COUNT`. It prunes only older
+`openjson-backup-*.sqlite3` files and adjacent manifests after a newly created
+backup passes the combined integrity check.
+
 See `docs/OPERATIONS_BASELINE.md`.

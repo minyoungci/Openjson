@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import closing, redirect_stdout
 from pathlib import Path
@@ -641,6 +642,56 @@ class OperationalBaselineTests(unittest.TestCase):
         self.assertEqual(restore_result["integrity"]["checks"]["migrations"]["status"], "ok")
         self.assertEqual(check_replay_consistency(restored_db)["status"], "ok")
         self.assertEqual(check_event_chain_consistency(restored_db)["status"], "ok")
+
+    def test_backup_retention_prunes_oldest_successful_backup_pair(self) -> None:
+        self._create_changed_document()
+        backup_dir = str(Path(self.tmp.name) / "retention-backups")
+
+        first = backup_sqlite(self.db_path, backup_dir, retention_count=5)
+        time.sleep(0.01)
+        second = backup_sqlite(self.db_path, backup_dir, retention_count=5)
+        time.sleep(0.01)
+        third = backup_sqlite(self.db_path, backup_dir, retention_count=2)
+
+        self.assertEqual(third["integrity"]["status"], "ok")
+        self.assertEqual(third["retention"]["status"], "ok")
+        self.assertEqual(third["retention"]["keep_count"], 2)
+        self.assertEqual(third["retention"]["pruned_count"], 1)
+        self.assertEqual(third["retention"]["remaining_count"], 2)
+        self.assertFalse(Path(first["backup_path"]).exists())
+        self.assertFalse(Path(first["manifest_path"]).exists())
+        self.assertTrue(Path(second["backup_path"]).exists())
+        self.assertTrue(Path(second["manifest_path"]).exists())
+        self.assertTrue(Path(third["backup_path"]).exists())
+        self.assertTrue(Path(third["manifest_path"]).exists())
+        self.assertEqual(
+            len(list(Path(backup_dir).glob("openjson-backup-*.sqlite3"))),
+            2,
+        )
+
+    def test_backup_retention_skips_pruning_when_integrity_fails(self) -> None:
+        self._create_changed_document()
+        backup_dir = str(Path(self.tmp.name) / "retention-failed-backups")
+        first = backup_sqlite(self.db_path, backup_dir, retention_count=1)
+        time.sleep(0.01)
+        self._create_event_metadata_tampered_document(
+            full_path="config/retention-failed-backup.json",
+            event_id="evt_bad_retention_backup",
+        )
+
+        second = backup_sqlite(self.db_path, backup_dir, retention_count=1)
+
+        self.assertEqual(second["integrity"]["status"], "failed")
+        self.assertEqual(second["retention"]["status"], "skipped")
+        self.assertEqual(second["retention"]["reason"], "integrity_failed")
+        self.assertTrue(Path(first["backup_path"]).exists())
+        self.assertTrue(Path(first["manifest_path"]).exists())
+        self.assertTrue(Path(second["backup_path"]).exists())
+        self.assertTrue(Path(second["manifest_path"]).exists())
+        self.assertEqual(
+            len(list(Path(backup_dir).glob("openjson-backup-*.sqlite3"))),
+            2,
+        )
 
     def test_restore_rejects_backup_that_does_not_match_manifest_before_copy(self) -> None:
         self._create_changed_document()

@@ -147,6 +147,7 @@ See `docs/TASK_116_PLAN.md` for the HTTP rate limit guard.
 See `docs/TASK_117_PLAN.md` for the WebSocket message rate limit guard.
 See `docs/TASK_118_PLAN.md` for the HTTP request body size guard.
 See `docs/TASK_119_PLAN.md` for the project usage limit guard.
+See `docs/TASK_120_PLAN.md` for the SQLite backup retention guard.
 
 ## Deployment Version
 

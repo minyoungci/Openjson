@@ -541,6 +541,15 @@ The backup manifest reports a combined `integrity` status. It is `ok` only
 when replay consistency, event-chain metadata integrity, and SQLite integrity
 checks pass, with migration ledger integrity included in the same envelope.
 
+To keep only the latest seven local backup files:
+
+```powershell
+python scripts\backup_sqlite.py --db-path "D:\OpenJson\openjson.sqlite3" --output-dir "D:\OpenJson\backups" --retention-count 7
+```
+
+You can also set `$env:OPENJSON_BACKUP_RETENTION_COUNT = "7"`. Retention runs
+only after the new backup passes the combined integrity check.
+
 SQLite MVP restore smoke:
 
 ```powershell
