@@ -193,9 +193,10 @@ def _deployment_check(
             "Deployment status smoke could not reach the public service.",
             {"base_url": base_url, "error": str(exc)},
         )
+    passed = report.get("status") == "ok"
     return _check(
-        report.get("status") == "ok",
-        "Deployment status smoke passed.",
+        passed,
+        "Deployment status smoke passed." if passed else "Deployment status smoke failed.",
         {
             "base_url": base_url,
             "report": report,

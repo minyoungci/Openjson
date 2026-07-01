@@ -170,6 +170,7 @@ services:
         self.assertEqual(captured["expect_commit"], "abc123")
         self.assertFalse(captured["expect_actor_header_allowed"])
         self.assertEqual(report["checks"]["deployment_status"]["status"], "failed")
+        self.assertEqual(report["checks"]["deployment_status"]["message"], "Deployment status smoke failed.")
         self.assertTrue(
             any("Manual Deploy" in action for action in report["summary"]["next_actions"]),
             report["summary"]["next_actions"],
