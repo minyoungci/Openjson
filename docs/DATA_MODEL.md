@@ -606,6 +606,14 @@ session, project, and document context before applying offline-sync responses
 to local browser queue state. This does not alter backend offline-sync
 idempotency, permissions, canonical snapshots, or append-only
 `document_events`.
+TASK_176 stale browser presence and collaboration-send guarding also adds no
+table. The static browser client tracks the document id owned by the current
+collaboration WebSocket and refuses outbound WebSocket messages when the socket
+no longer matches the selected document. HTTP presence heartbeats capture
+request context and explicitly clean up stale captured-document presence if a
+delayed heartbeat completes after document or session transitions. This does
+not alter `editor_presence` schema, WebSocket server state, permissions,
+canonical snapshots, or append-only `document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

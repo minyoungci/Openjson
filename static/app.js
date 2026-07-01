@@ -157,9 +157,11 @@
     zipApplying: false,
     presenceCursorTimer: null,
     activePresenceDocumentId: "",
+    presenceHeartbeatRequestId: 0,
     collaborationTimer: null,
     presenceTimer: null,
     collaborationSocket: null,
+    collaborationSocketDocumentId: "",
     collaborationReconnectTimer: null,
     collaborationStateRequestId: 0,
     collaborationTransport: "polling",
@@ -607,6 +609,7 @@
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
     invalidateOfflineSyncRequests();
+    invalidatePresenceHeartbeatRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
@@ -1661,6 +1664,7 @@
       invalidateSaveRequests();
       invalidateRollbackRequests();
       invalidateOfflineSyncRequests();
+      invalidatePresenceHeartbeatRequests();
       invalidateCreateDocumentRequests();
       invalidateCreateFileImportRequests();
       invalidateEditorFileImportRequests();
@@ -1708,6 +1712,7 @@
     invalidateSaveRequests();
     invalidateRollbackRequests();
     invalidateOfflineSyncRequests();
+    invalidatePresenceHeartbeatRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
     invalidateCreateFileImportRequests();
@@ -2808,6 +2813,7 @@
   function stopCollaborationLoop() {
     state.collaborationStopped = true;
     invalidateCollaborationStateRequests();
+    invalidatePresenceHeartbeatRequests();
     sendPresenceLeave(state.activePresenceDocumentId || state.selectedDocumentId);
     state.activePresenceDocumentId = "";
     window.clearInterval(state.presenceTimer);
@@ -2821,6 +2827,7 @@
     if (state.collaborationSocket) {
       const socket = state.collaborationSocket;
       state.collaborationSocket = null;
+      state.collaborationSocketDocumentId = "";
       socket.close();
     }
   }
@@ -2910,10 +2917,12 @@
     url.searchParams.set("token", state.token);
     const socket = new WebSocket(url.toString());
     state.collaborationSocket = socket;
+    state.collaborationSocketDocumentId = documentId;
     state.collaborationTransport = "connecting";
 
     socket.addEventListener("open", () => {
-      if (state.collaborationSocket !== socket) {
+      if (!isCurrentCollaborationSocket(socket, documentId)) {
+        socket.close();
         return;
       }
       state.collaborationTransport = "websocket";
@@ -2924,7 +2933,7 @@
     });
 
     socket.addEventListener("message", (event) => {
-      if (state.collaborationSocket !== socket) {
+      if (!isCurrentCollaborationSocket(socket, documentId)) {
         return;
       }
       let payload;
@@ -2961,6 +2970,7 @@
         return;
       }
       state.collaborationSocket = null;
+      state.collaborationSocketDocumentId = "";
       state.collaborationTransport = "polling";
       markLiveTextOperationUnacknowledged();
       if (state.collaborationStopped || state.selectedDocumentId !== documentId) {
@@ -2972,7 +2982,7 @@
     });
 
     socket.addEventListener("error", () => {
-      if (state.collaborationSocket !== socket) {
+      if (!isCurrentCollaborationSocket(socket, documentId)) {
         return;
       }
       state.collaborationTransport = "polling";
@@ -2984,8 +2994,19 @@
     if (!state.collaborationSocket || state.collaborationSocket.readyState !== WebSocket.OPEN) {
       return false;
     }
+    if (!state.collaborationSocketDocumentId || state.collaborationSocketDocumentId !== state.selectedDocumentId) {
+      return false;
+    }
     state.collaborationSocket.send(JSON.stringify(payload));
     return true;
+  }
+
+  function isCurrentCollaborationSocket(socket, documentId) {
+    return (
+      state.collaborationSocket === socket &&
+      state.collaborationSocketDocumentId === documentId &&
+      state.selectedDocumentId === documentId
+    );
   }
 
   function newClientOperationId(prefix) {
@@ -3336,15 +3357,14 @@
     };
   }
 
-  function sendPresenceLeave(documentId) {
+  function sendPresenceLeave(documentId, token) {
     const targetDocumentId = documentId || state.activePresenceDocumentId || state.selectedDocumentId;
-    if (!targetDocumentId || !state.token) {
+    const authToken = token || state.token;
+    if (!targetDocumentId || !authToken) {
       return;
     }
     const headers = { Accept: "application/json" };
-    if (state.token) {
-      headers.Authorization = `Bearer ${state.token}`;
-    }
+    headers.Authorization = `Bearer ${authToken}`;
     fetch(`/documents/${encodeURIComponent(targetDocumentId)}/presence`, {
       method: "DELETE",
       headers,
@@ -3353,6 +3373,9 @@
   }
 
   async function sendPresenceHeartbeat() {
+    const documentId = state.selectedDocumentId;
+    const sessionUserId = state.userId;
+    const token = state.token;
     const payload = buildPresencePayload();
     if (!payload) {
       return;
@@ -3360,15 +3383,35 @@
     if (sendRealtimeMessage(payload)) {
       return;
     }
-    await apiFetch(`/documents/${encodeURIComponent(state.selectedDocumentId)}/presence`, {
-      method: "POST",
-      body: {
-        status: payload.status,
-        base_version: payload.base_version,
-        dirty: payload.dirty,
-        cursor_path: payload.cursor_path,
-      },
-    });
+    const requestId = state.presenceHeartbeatRequestId + 1;
+    state.presenceHeartbeatRequestId = requestId;
+    try {
+      await apiFetch(`/documents/${encodeURIComponent(documentId)}/presence`, {
+        method: "POST",
+        body: {
+          status: payload.status,
+          base_version: payload.base_version,
+          dirty: payload.dirty,
+          cursor_path: payload.cursor_path,
+        },
+      });
+    } catch (error) {
+      if (state.presenceHeartbeatRequestId !== requestId || isStalePresenceHeartbeatContext(documentId, sessionUserId)) {
+        return;
+      }
+      throw error;
+    }
+    if (isStalePresenceHeartbeatContext(documentId, sessionUserId)) {
+      sendPresenceLeave(documentId, token);
+    }
+  }
+
+  function isStalePresenceHeartbeatContext(documentId, sessionUserId) {
+    return state.selectedDocumentId !== documentId || state.userId !== sessionUserId;
+  }
+
+  function invalidatePresenceHeartbeatRequests() {
+    state.presenceHeartbeatRequestId += 1;
   }
 
   async function refreshCollaborationState() {

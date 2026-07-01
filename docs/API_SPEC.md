@@ -262,6 +262,9 @@ or overlapping bootstrap loads.
 See `docs/TASK_175_PLAN.md` for guarding stale browser offline-sync responses
 after project switches, document switches, session changes, or overlapping
 offline queue flushes.
+See `docs/TASK_176_PLAN.md` for guarding stale browser presence heartbeats and
+outbound collaboration WebSocket sends after document switches or socket
+replacement.
 
 ## Deployment Version
 

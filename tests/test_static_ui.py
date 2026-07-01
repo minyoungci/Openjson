@@ -411,8 +411,11 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("sendRealtimeMessage", js.text)
         self.assertIn("sendPresenceHeartbeat", js.text)
         self.assertIn("activePresenceDocumentId", js.text)
+        self.assertIn("presenceHeartbeatRequestId", js.text)
+        self.assertIn("collaborationSocketDocumentId", js.text)
         self.assertIn("sendPresenceLeave(state.activePresenceDocumentId || state.selectedDocumentId)", js.text)
-        self.assertIn("targetDocumentId || !state.token", js.text)
+        self.assertIn("const authToken = token || state.token", js.text)
+        self.assertIn("targetDocumentId || !authToken", js.text)
         self.assertIn("text_session.join", js.text)
         self.assertIn("text_session.commit", js.text)
         self.assertIn("client_operation_id", js.text)
@@ -433,7 +436,33 @@ class StaticUiTests(unittest.TestCase):
         collaboration_socket_handler = js.text.split("function openCollaborationSocket()", 1)[1].split(
             "function sendRealtimeMessage", 1
         )[0]
+        self.assertIn("state.collaborationSocketDocumentId = documentId", collaboration_socket_handler)
+        self.assertIn("if (!isCurrentCollaborationSocket(socket, documentId))", collaboration_socket_handler)
         self.assertIn("if (state.collaborationSocket !== socket)", collaboration_socket_handler)
+        realtime_sender = js.text.split("function sendRealtimeMessage", 1)[1].split(
+            "function isCurrentCollaborationSocket", 1
+        )[0]
+        self.assertIn("state.collaborationSocketDocumentId !== state.selectedDocumentId", realtime_sender)
+        self.assertIn("state.collaborationSocket.send(JSON.stringify(payload))", realtime_sender)
+        self.assertIn("function isCurrentCollaborationSocket(socket, documentId)", js.text)
+        self.assertIn("state.collaborationSocketDocumentId === documentId", js.text)
+        self.assertIn("state.selectedDocumentId === documentId", js.text)
+        presence_heartbeat = js.text.split("async function sendPresenceHeartbeat()", 1)[1].split(
+            "async function refreshCollaborationState", 1
+        )[0]
+        self.assertIn("const documentId = state.selectedDocumentId", presence_heartbeat)
+        self.assertIn("const sessionUserId = state.userId", presence_heartbeat)
+        self.assertIn("const token = state.token", presence_heartbeat)
+        self.assertIn("const requestId = state.presenceHeartbeatRequestId + 1", presence_heartbeat)
+        self.assertIn("state.presenceHeartbeatRequestId = requestId", presence_heartbeat)
+        self.assertIn("/documents/${encodeURIComponent(documentId)}/presence", presence_heartbeat)
+        self.assertIn(
+            "state.presenceHeartbeatRequestId !== requestId || isStalePresenceHeartbeatContext(documentId, sessionUserId)",
+            presence_heartbeat,
+        )
+        self.assertIn("sendPresenceLeave(documentId, token)", presence_heartbeat)
+        self.assertIn("function isStalePresenceHeartbeatContext(documentId, sessionUserId)", js.text)
+        self.assertIn("function invalidatePresenceHeartbeatRequests()", js.text)
         collaboration_state_loader = js.text.split("async function refreshCollaborationState()", 1)[1].split(
             "async function applyCollaborationState", 1
         )[0]
@@ -457,6 +486,8 @@ class StaticUiTests(unittest.TestCase):
             "function ensureProjectWorkspaceSocket", 1
         )[0]
         self.assertIn("invalidateCollaborationStateRequests()", collaboration_stop)
+        self.assertIn("invalidatePresenceHeartbeatRequests()", collaboration_stop)
+        self.assertIn("state.collaborationSocketDocumentId = \"\"", collaboration_stop)
         self.assertIn("markLiveTextOperationUnacknowledged", js.text)
         self.assertIn("resyncLiveTextSessionAfterConflict", js.text)
         self.assertIn("Live text change is still syncing.", js.text)
@@ -589,6 +620,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateSaveRequests()", editor_state_setter)
         self.assertIn("invalidateRollbackRequests()", editor_state_setter)
         self.assertIn("invalidateOfflineSyncRequests()", editor_state_setter)
+        self.assertIn("invalidatePresenceHeartbeatRequests()", editor_state_setter)
         self.assertIn("invalidateCreateDocumentRequests()", editor_state_setter)
         self.assertIn("invalidateCreateFileImportRequests()", editor_state_setter)
         self.assertIn("invalidateEditorFileImportRequests()", editor_state_setter)
