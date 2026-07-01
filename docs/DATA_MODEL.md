@@ -463,6 +463,11 @@ create, ZIP import apply, soft delete, and restore continue to persist only
 through existing `json_documents` and append-only `document_events` rows. The
 `project.documents.changed` payload is an operational project-channel signal so
 connected browser clients can refresh their derived document list and tree.
+TASK_164 project document-change refresh status guarding also adds no table.
+The static browser client tracks these refresh handlers in memory and applies
+the final status only while the project id, selected document id, and clean
+editor state still match the captured context. This does not persist project
+events or alter document event history.
 
 TASK_145 human-readable collaboration actors also adds no table. It preserves
 durable `actor_id` values in event and collaboration payloads while joining

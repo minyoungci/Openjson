@@ -331,6 +331,24 @@ class StaticUiTests(unittest.TestCase):
         self.assertNotIn("state.collaborationSocket !== socket", project_socket_handler)
         self.assertIn("Project documents changed. Save or reload", js.text)
         self.assertIn("Project documents updated.", js.text)
+        project_documents_changed = js.text.split("async function applyProjectDocumentsChanged", 1)[1].split(
+            "async function createCommentThread", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", project_documents_changed)
+        self.assertIn("const selectedDocumentId = state.selectedDocumentId || \"\"", project_documents_changed)
+        self.assertIn("const requestId = state.projectDocumentsChangeRequestId + 1", project_documents_changed)
+        self.assertIn("state.projectDocumentsChangeRequestId = requestId", project_documents_changed)
+        self.assertIn("await loadBootstrap(selectedDocumentId || null)", project_documents_changed)
+        self.assertIn(
+            "if (!isCurrentProjectDocumentsChangeRequest(requestId, projectId, selectedDocumentId))",
+            project_documents_changed,
+        )
+        self.assertIn("function isCurrentProjectDocumentsChangeRequest(requestId, projectId, selectedDocumentId)", js.text)
+        self.assertIn("state.projectDocumentsChangeRequestId === requestId", js.text)
+        self.assertIn("(state.selectedDocumentId || \"\") === selectedDocumentId", js.text)
+        self.assertIn("!state.dirty", js.text)
+        self.assertIn("function invalidateProjectDocumentsChangeRequests()", js.text)
+        self.assertIn("state.projectDocumentsChangeRequestId += 1", js.text)
         bootstrap_loader = js.text.split("async function loadBootstrap", 1)[1].split(
             "async function fetchProjectSchemasSafe", 1
         )[0]
@@ -362,14 +380,17 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("function isCurrentProjectHomeRequest(requestId)", js.text)
         self.assertIn("function invalidateProjectHomeRequests()", js.text)
         self.assertIn("state.projectHomeRequestId += 1", js.text)
+        self.assertIn("invalidateProjectDocumentsChangeRequests()", project_home_loader)
         project_opener = js.text.split("async function openProject", 1)[1].split("function setProjectId", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", project_opener)
+        self.assertIn("invalidateProjectDocumentsChangeRequests()", project_opener)
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
         self.assertIn("invalidateProjectHomeRequests()", session_clearer)
         self.assertIn("invalidateTeamMembersRequests()", session_clearer)
         self.assertIn("invalidateDocumentPanelRequests()", session_clearer)
         self.assertIn("invalidateSaveRequests()", session_clearer)
         self.assertIn("invalidateRollbackRequests()", session_clearer)
+        self.assertIn("invalidateProjectDocumentsChangeRequests()", session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(
             "async function createProjectInvite", 1
         )[0]

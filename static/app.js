@@ -116,6 +116,7 @@
     availableProjects: [],
     projectHomeErrors: [],
     projectHomeRequestId: 0,
+    projectDocumentsChangeRequestId: 0,
     selectedDocumentId: initialParams.get("document_id") || localStorage.getItem("openjson.selectedDocumentId") || "",
     selectedEditorState: null,
     validationRequestId: 0,
@@ -512,6 +513,7 @@
     const requestId = state.projectHomeRequestId + 1;
     state.projectHomeRequestId = requestId;
     invalidateBootstrapRequests();
+    invalidateProjectDocumentsChangeRequests();
     invalidateTeamMembersRequests();
     stopCollaborationLoop();
     stopProjectWorkspaceSocket();
@@ -602,6 +604,7 @@
 
   async function openProject(projectId, selectedDocumentId) {
     invalidateProjectHomeRequests();
+    invalidateProjectDocumentsChangeRequests();
     setProjectId(projectId);
     if (!selectedDocumentId) {
       state.selectedDocumentId = "";
@@ -793,6 +796,7 @@
     state.selectedDocumentId = "";
     invalidateProjectHomeRequests();
     invalidateBootstrapRequests();
+    invalidateProjectDocumentsChangeRequests();
     invalidateTeamMembersRequests();
     invalidateCommentThreadsRequests();
     invalidateDocumentPanelRequests();
@@ -1298,6 +1302,7 @@
     invalidateDocumentPanelRequests();
     invalidateSaveRequests();
     invalidateRollbackRequests();
+    invalidateProjectDocumentsChangeRequests();
     state.originalText = "";
     state.liveTextShadow = "";
     state.liveTextRevision = 0;
@@ -1834,6 +1839,7 @@
         invalidateDocumentPanelRequests();
         invalidateSaveRequests();
         invalidateRollbackRequests();
+        invalidateProjectDocumentsChangeRequests();
         state.liveTextShadow = "";
         state.liveTextRevision = 0;
         state.liveTextPendingOperation = false;
@@ -1866,12 +1872,32 @@
     if (!payload || payload.project_id !== state.projectId) {
       return;
     }
+    const projectId = state.projectId;
+    const selectedDocumentId = state.selectedDocumentId || "";
+    const requestId = state.projectDocumentsChangeRequestId + 1;
+    state.projectDocumentsChangeRequestId = requestId;
     if (state.dirty) {
       setEditorStatus("Project documents changed. Save or reload to refresh the tree.", "info");
       return;
     }
-    await loadBootstrap(state.selectedDocumentId || null);
+    await loadBootstrap(selectedDocumentId || null);
+    if (!isCurrentProjectDocumentsChangeRequest(requestId, projectId, selectedDocumentId)) {
+      return;
+    }
     setEditorStatus("Project documents updated.", "info");
+  }
+
+  function isCurrentProjectDocumentsChangeRequest(requestId, projectId, selectedDocumentId) {
+    return (
+      state.projectDocumentsChangeRequestId === requestId &&
+      state.projectId === projectId &&
+      (state.selectedDocumentId || "") === selectedDocumentId &&
+      !state.dirty
+    );
+  }
+
+  function invalidateProjectDocumentsChangeRequests() {
+    state.projectDocumentsChangeRequestId += 1;
   }
 
   async function createCommentThread() {

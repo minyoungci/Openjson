@@ -228,6 +228,9 @@ See `docs/TASK_162_PLAN.md` for guarding stale browser manual save and autosave
 responses after document switches, version changes, or editor buffer changes.
 See `docs/TASK_163_PLAN.md` for guarding stale browser rollback responses after
 document switches, version changes, or overlapping rollback requests.
+See `docs/TASK_164_PLAN.md` for guarding stale browser
+`project.documents.changed` refresh status after project switches, document
+switches, dirty editor changes, or overlapping project document-change refreshes.
 
 ## Deployment Version
 
@@ -666,6 +669,11 @@ static browser client processes project workspace WebSocket messages only from
 the currently active project socket and still ignores
 `project.documents.changed` payloads whose `project_id` does not match the
 selected project.
+After a clean-editor project document-change refresh finishes, the static
+browser client writes the updated status only when the latest refresh request
+still matches the captured project id, selected document id, and clean editor
+state. Stale successes are ignored instead of overwriting the current editor
+status.
 The static browser client also applies project editor-bootstrap responses only
 when the response belongs to the latest browser bootstrap request and the same
 active project id, so delayed HTTP responses cannot overwrite the current
