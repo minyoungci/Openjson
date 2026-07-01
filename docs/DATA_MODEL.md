@@ -632,6 +632,12 @@ and restores the preserved local buffer only while the selected document and
 captured conflict text still match. This protects transient editor state
 without changing conflict-preview APIs, save APIs, canonical snapshots,
 offline sync, WebSocket behavior, or append-only `document_events`.
+TASK_180 stale clipboard copy-status guarding also adds no table. The static
+browser client tracks share-link and invite-link clipboard operations in
+memory and reports copied/fallback statuses only while the captured project,
+document, user, and link context still match. This does not change share URL
+shape, invitation token generation, email delivery, permissions, canonical
+snapshots, or append-only `document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

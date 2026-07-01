@@ -267,6 +267,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("state.createFileImportRequestId", js.text)
         self.assertIn("state.editorFileImportRequestId", js.text)
         self.assertIn("state.projectInviteAcceptRequestId", js.text)
+        self.assertIn("state.inviteLinkCopyRequestId", js.text)
+        self.assertIn("state.shareLinkCopyRequestId", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/members", js.text)
         self.assertIn("/projects/${encodeURIComponent(targetProjectId)}/usage", js.text)
         self.assertIn("/auth/signup", js.text)
@@ -308,6 +310,18 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("/rollback", js.text)
         self.assertIn("URLSearchParams", js.text)
         self.assertIn("navigator.clipboard", js.text)
+        share_copy = js.text.split("async function copyShareLink()", 1)[1].split(
+            "function renderBootstrap", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", share_copy)
+        self.assertIn("const documentId = state.selectedDocumentId", share_copy)
+        self.assertIn("const requestId = state.shareLinkCopyRequestId + 1", share_copy)
+        self.assertIn("state.shareLinkCopyRequestId = requestId", share_copy)
+        self.assertIn("if (!isCurrentShareLinkCopyRequest(requestId, projectId, documentId, url))", share_copy)
+        self.assertIn("function isCurrentShareLinkCopyRequest(requestId, projectId, documentId, url)", js.text)
+        self.assertIn("state.shareLinkCopyRequestId === requestId", js.text)
+        self.assertIn("buildShareUrl().toString() === url", js.text)
+        self.assertIn("function invalidateShareLinkCopyRequests()", js.text)
         self.assertIn("importEditorFile", js.text)
         self.assertIn("keepLocalBufferOnLatest", js.text)
         self.assertIn("previewCreateSchemaMatch", js.text)
@@ -406,6 +420,26 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("clearInviteResult", js.text)
         self.assertIn("copyInviteLink", js.text)
         self.assertIn("Invite link copied", js.text)
+        invite_link_updater = js.text.split("function updateInviteLinkField()", 1)[1].split(
+            "function clearInviteResult", 1
+        )[0]
+        self.assertIn("invalidateInviteLinkCopyRequests()", invite_link_updater)
+        invite_link_clearer = js.text.split("function clearInviteResult()", 1)[1].split(
+            "async function copyInviteLink", 1
+        )[0]
+        self.assertIn("invalidateInviteLinkCopyRequests()", invite_link_clearer)
+        invite_copy = js.text.split("async function copyInviteLink()", 1)[1].split(
+            "async function acceptProjectInvite", 1
+        )[0]
+        self.assertIn("const projectId = state.projectId", invite_copy)
+        self.assertIn("const sessionUserId = state.userId", invite_copy)
+        self.assertIn("const requestId = state.inviteLinkCopyRequestId + 1", invite_copy)
+        self.assertIn("state.inviteLinkCopyRequestId = requestId", invite_copy)
+        self.assertIn("if (!isCurrentInviteLinkCopyRequest(requestId, projectId, sessionUserId, link))", invite_copy)
+        self.assertIn("function isCurrentInviteLinkCopyRequest(requestId, projectId, sessionUserId, link)", js.text)
+        self.assertIn("state.inviteLinkCopyRequestId === requestId", js.text)
+        self.assertIn("els.inviteLink.value.trim() === link", js.text)
+        self.assertIn("function invalidateInviteLinkCopyRequests()", js.text)
         self.assertIn("pendingInviteToken", js.text)
         self.assertIn("invitePromptText", js.text)
         self.assertIn("acceptPendingInvitation", js.text)
@@ -761,6 +795,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateCreateDocumentRequests()", project_home_loader)
         self.assertIn("invalidateProjectInviteRequests()", project_home_loader)
         self.assertIn("invalidateProjectInviteAcceptRequests()", project_home_loader)
+        self.assertIn("invalidateInviteLinkCopyRequests()", project_home_loader)
+        self.assertIn("invalidateShareLinkCopyRequests()", project_home_loader)
         self.assertIn("invalidateOfflineSyncRequests()", project_home_loader)
         self.assertIn("stopCollaborationLoop()", project_home_loader)
         self.assertIn("stopProjectWorkspaceSocket()", project_home_loader)
@@ -783,6 +819,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateEditorFileImportRequests()", project_opener)
         self.assertIn("invalidateProjectInviteRequests()", project_opener)
         self.assertIn("invalidateProjectInviteAcceptRequests()", project_opener)
+        self.assertIn("invalidateInviteLinkCopyRequests()", project_opener)
+        self.assertIn("invalidateShareLinkCopyRequests()", project_opener)
         self.assertIn("invalidateOfflineSyncRequests()", project_opener)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', project_opener)
         session_clearer = js.text.split("function clearSessionState", 1)[1].split("function invitePromptText", 1)[0]
@@ -798,6 +836,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("invalidateEditorFileImportRequests()", session_clearer)
         self.assertIn("invalidateProjectInviteRequests()", session_clearer)
         self.assertIn("invalidateProjectInviteAcceptRequests()", session_clearer)
+        self.assertIn("invalidateInviteLinkCopyRequests()", session_clearer)
+        self.assertIn("invalidateShareLinkCopyRequests()", session_clearer)
         self.assertIn("invalidateOfflineSyncRequests()", session_clearer)
         self.assertIn('resetZipImportSelection("No ZIP selected.")', session_clearer)
         team_members_refresher = js.text.split("async function refreshTeamMembers()", 1)[1].split(

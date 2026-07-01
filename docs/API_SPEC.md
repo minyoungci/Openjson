@@ -272,6 +272,8 @@ See `docs/TASK_178_PLAN.md` for refreshing expired browser sessions for binary
 ZIP upload requests before surfacing 401 failures.
 See `docs/TASK_179_PLAN.md` for guarding stale conflict keep-local-buffer
 actions after document, session, or editor-buffer changes.
+See `docs/TASK_180_PLAN.md` for guarding stale browser clipboard copy statuses
+for share and invite links.
 
 ## Deployment Version
 

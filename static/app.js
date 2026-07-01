@@ -139,6 +139,8 @@
     teamMembersRequestId: 0,
     projectInviteRequestId: 0,
     projectInviteAcceptRequestId: 0,
+    inviteLinkCopyRequestId: 0,
+    shareLinkCopyRequestId: 0,
     projectUsage: null,
     projectUsageError: null,
     commentThreads: [],
@@ -610,6 +612,8 @@
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
+    invalidateInviteLinkCopyRequests();
+    invalidateShareLinkCopyRequests();
     invalidateOfflineSyncRequests();
     invalidatePresenceHeartbeatRequests();
     resetZipImportSelection("No ZIP selected.");
@@ -747,6 +751,8 @@
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
+    invalidateInviteLinkCopyRequests();
+    invalidateShareLinkCopyRequests();
     invalidateOfflineSyncRequests();
     resetZipImportSelection("No ZIP selected.");
     setProjectId(projectId);
@@ -1054,6 +1060,8 @@
     invalidateEditorFileImportRequests();
     invalidateProjectInviteRequests();
     invalidateProjectInviteAcceptRequests();
+    invalidateInviteLinkCopyRequests();
+    invalidateShareLinkCopyRequests();
     invalidateOfflineSyncRequests();
     resetZipImportSelection("No ZIP selected.");
     invalidateTeamMembersRequests();
@@ -1419,11 +1427,13 @@
   }
 
   function updateInviteLinkField() {
+    invalidateInviteLinkCopyRequests();
     const token = els.inviteToken.value.trim();
     els.inviteLink.value = token ? buildInviteUrl(token).toString() : "";
   }
 
   function clearInviteResult() {
+    invalidateInviteLinkCopyRequests();
     els.inviteToken.value = "";
     els.inviteLink.value = "";
     clearPanel(els.teamActionOutput, "Invite a teammate by email, then share the generated link or token.");
@@ -1435,12 +1445,35 @@
       renderText(els.teamActionOutput, "Create an invite before copying its link.", "error-text");
       return;
     }
+    const projectId = state.projectId;
+    const sessionUserId = state.userId;
+    const requestId = state.inviteLinkCopyRequestId + 1;
+    state.inviteLinkCopyRequestId = requestId;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(link);
+      if (!isCurrentInviteLinkCopyRequest(requestId, projectId, sessionUserId, link)) {
+        return;
+      }
       renderText(els.teamActionOutput, "Invite link copied.", "ok-text");
       return;
     }
+    if (!isCurrentInviteLinkCopyRequest(requestId, projectId, sessionUserId, link)) {
+      return;
+    }
     renderText(els.teamActionOutput, link, "muted");
+  }
+
+  function isCurrentInviteLinkCopyRequest(requestId, projectId, sessionUserId, link) {
+    return (
+      state.inviteLinkCopyRequestId === requestId &&
+      state.projectId === projectId &&
+      state.userId === sessionUserId &&
+      els.inviteLink.value.trim() === link
+    );
+  }
+
+  function invalidateInviteLinkCopyRequests() {
+    state.inviteLinkCopyRequestId += 1;
   }
 
   async function acceptProjectInvite() {
@@ -1534,14 +1567,37 @@
 
   async function copyShareLink() {
     const url = buildShareUrl().toString();
+    const projectId = state.projectId;
+    const documentId = state.selectedDocumentId;
+    const requestId = state.shareLinkCopyRequestId + 1;
+    state.shareLinkCopyRequestId = requestId;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(url);
+      if (!isCurrentShareLinkCopyRequest(requestId, projectId, documentId, url)) {
+        return;
+      }
       setEditorStatus("Share link copied.", "ok");
+      return;
+    }
+    if (!isCurrentShareLinkCopyRequest(requestId, projectId, documentId, url)) {
       return;
     }
     clear(els.validationPanel);
     renderText(els.validationPanel, url, "muted");
     setEditorStatus("Share link ready.", "info");
+  }
+
+  function isCurrentShareLinkCopyRequest(requestId, projectId, documentId, url) {
+    return (
+      state.shareLinkCopyRequestId === requestId &&
+      state.projectId === projectId &&
+      state.selectedDocumentId === documentId &&
+      buildShareUrl().toString() === url
+    );
+  }
+
+  function invalidateShareLinkCopyRequests() {
+    state.shareLinkCopyRequestId += 1;
   }
 
   function renderBootstrap(data) {
