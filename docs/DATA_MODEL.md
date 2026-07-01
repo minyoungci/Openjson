@@ -571,6 +571,12 @@ captured target project, document, file, form, version, and buffer context
 before applying local file-read results or parse failures. This does not alter
 JSON syntax validation, document create/save transactions, canonical snapshots,
 or append-only `document_events`.
+TASK_170 stale project creation response guarding also adds no table. The
+static browser client tracks project-create request ids and captured actor,
+workspace, project, description, and panel visibility context before applying
+create results or failures. This does not alter workspace/project transactions,
+memberships, permissions, canonical snapshots, or append-only
+`document_events`.
 
 TASK_158 stale team member refresh guarding also adds no table. The static
 browser client tracks manual project member refresh requests in memory and

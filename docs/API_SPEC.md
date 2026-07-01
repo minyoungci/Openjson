@@ -244,6 +244,9 @@ create-form changes.
 See `docs/TASK_169_PLAN.md` for guarding stale browser JSON file import
 results after project switches, document switches, create-panel closes, reloads,
 or target form/buffer changes.
+See `docs/TASK_170_PLAN.md` for guarding stale browser project-creation
+responses after session changes, project navigation, create-panel closes, or
+create-form changes.
 
 ## Deployment Version
 
@@ -712,6 +715,13 @@ Manual team member refreshes in the static browser are applied only when the
 response still belongs to the latest member refresh request for the active
 project id. Returning to project selection or clearing session state invalidates
 outstanding member refreshes.
+Project-creation responses in the static browser are applied only when they
+still match the latest create request, captured actor id, visible create panel,
+workspace name input, project name input, and project description input.
+Project-home loading, project opening, session clearing, closing the create
+panel, or editing the create form invalidates outstanding project creates, and
+stale successes or failures are ignored instead of rendering into the current
+project setup screen.
 Project-home workspace/project list loads in the static browser are applied
 only when the response still belongs to the latest project-home request. Opening
 a project, starting project creation, or clearing session state invalidates

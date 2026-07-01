@@ -116,6 +116,7 @@
     availableProjects: [],
     projectHomeErrors: [],
     projectHomeRequestId: 0,
+    createProjectRequestId: 0,
     projectDocumentsChangeRequestId: 0,
     selectedDocumentId: initialParams.get("document_id") || localStorage.getItem("openjson.selectedDocumentId") || "",
     selectedEditorState: null,
@@ -176,6 +177,7 @@
     rollbackRequestId: 0,
     saving: false,
     rollingBack: false,
+    creatingProject: false,
     autosaving: false,
     conflictLocalText: "",
     originalText: "",
@@ -237,11 +239,28 @@
     });
 
     els.showCreateProjectButton.addEventListener("click", () => {
+      invalidateCreateProjectRequests();
       showProjectCreateMode();
     });
 
     els.cancelProjectCreateButton.addEventListener("click", () => {
+      invalidateCreateProjectRequests();
       showProjectListMode();
+    });
+
+    els.workspaceName.addEventListener("input", () => {
+      invalidateCreateProjectRequests();
+      syncButtons();
+    });
+
+    els.projectName.addEventListener("input", () => {
+      invalidateCreateProjectRequests();
+      syncButtons();
+    });
+
+    els.projectDescription.addEventListener("input", () => {
+      invalidateCreateProjectRequests();
+      syncButtons();
     });
 
     els.projectList.addEventListener("click", (event) => {
@@ -538,6 +557,7 @@
     }
     const requestId = state.projectHomeRequestId + 1;
     state.projectHomeRequestId = requestId;
+    invalidateCreateProjectRequests();
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
@@ -598,42 +618,80 @@
   }
 
   async function createProjectFromGate() {
-    if (!state.token) {
+    const sessionUserId = state.userId;
+    if (!state.token || !sessionUserId) {
       showAuthScreen(invitePromptText());
       return;
     }
-    const workspaceName = els.workspaceName.value.trim();
-    const projectName = els.projectName.value.trim();
-    const description = cleanOptional(els.projectDescription.value);
+    const workspaceNameText = els.workspaceName.value;
+    const projectNameText = els.projectName.value;
+    const descriptionText = els.projectDescription.value;
+    const workspaceName = workspaceNameText.trim();
+    const projectName = projectNameText.trim();
+    const description = cleanOptional(descriptionText);
     if (!workspaceName || !projectName) {
       renderText(els.projectSetupOutput, "Workspace name and project name are required.", "error-text");
       return;
     }
+    if (state.creatingProject) {
+      return;
+    }
+    const requestId = state.createProjectRequestId + 1;
+    state.createProjectRequestId = requestId;
+    state.creatingProject = true;
     invalidateProjectHomeRequests();
-    state.loading = true;
     showProjectCreateMode();
     syncButtons();
+    let project;
     try {
       const workspace = await apiFetch("/workspaces", {
         method: "POST",
         body: { name: workspaceName },
       });
-      const project = await apiFetch(`/workspaces/${encodeURIComponent(workspace.id)}/projects`, {
+      project = await apiFetch(`/workspaces/${encodeURIComponent(workspace.id)}/projects`, {
         method: "POST",
         body: { name: projectName, description },
       });
-      els.projectName.value = "";
-      els.projectDescription.value = "";
-      renderText(els.projectSetupOutput, `Created ${project.name}.`, "ok-text");
-      await openProject(project.id, null);
+    } catch (error) {
+      if (!isCurrentCreateProjectRequest(requestId, sessionUserId, workspaceNameText, projectNameText, descriptionText)) {
+        return;
+      }
+      throw error;
     } finally {
-      state.loading = false;
-      syncButtons();
+      if (state.createProjectRequestId === requestId) {
+        state.creatingProject = false;
+        syncButtons();
+      }
     }
+    if (!isCurrentCreateProjectRequest(requestId, sessionUserId, workspaceNameText, projectNameText, descriptionText)) {
+      return;
+    }
+    els.projectName.value = "";
+    els.projectDescription.value = "";
+    renderText(els.projectSetupOutput, `Created ${project.name}.`, "ok-text");
+    await openProject(project.id, null);
+  }
+
+  function isCurrentCreateProjectRequest(requestId, sessionUserId, workspaceNameText, projectNameText, descriptionText) {
+    return (
+      state.createProjectRequestId === requestId &&
+      state.userId === sessionUserId &&
+      els.workspaceName.value === workspaceNameText &&
+      els.projectName.value === projectNameText &&
+      els.projectDescription.value === descriptionText &&
+      !els.projectCreatePanel.classList.contains("hidden")
+    );
+  }
+
+  function invalidateCreateProjectRequests() {
+    state.createProjectRequestId += 1;
+    state.creatingProject = false;
+    syncButtons();
   }
 
   async function openProject(projectId, selectedDocumentId) {
     invalidateProjectHomeRequests();
+    invalidateCreateProjectRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
     invalidateCreateFileImportRequests();
@@ -829,6 +887,7 @@
     state.projectId = "";
     state.selectedDocumentId = "";
     invalidateProjectHomeRequests();
+    invalidateCreateProjectRequests();
     invalidateBootstrapRequests();
     invalidateProjectDocumentsChangeRequests();
     invalidateCreateDocumentRequests();
@@ -3097,6 +3156,7 @@
       state.loading ||
       state.saving ||
       state.rollingBack ||
+      state.creatingProject ||
       state.creatingDocument ||
       state.zipPreviewing ||
       state.zipApplying ||
@@ -3109,6 +3169,9 @@
     els.showCreateProjectButton.disabled = busy || !state.token;
     els.cancelProjectCreateButton.disabled = busy || !state.token;
     els.createProjectButton.disabled = busy || !state.token;
+    els.workspaceName.disabled = busy || !state.token;
+    els.projectName.disabled = busy || !state.token;
+    els.projectDescription.disabled = busy || !state.token;
     els.reloadButton.disabled = busy;
     els.zipSelectButton.disabled = busy;
     els.zipPreviewButton.disabled = busy || !state.zipFile;
