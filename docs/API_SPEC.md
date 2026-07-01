@@ -173,6 +173,8 @@ See `docs/TASK_135_PLAN.md` for browser live-text local-buffer preservation
 when remote accepted operations arrive during local typing.
 See `docs/TASK_136_PLAN.md` for browser live-text local-buffer preservation
 when session state arrives during join or reconnect.
+See `docs/TASK_137_PLAN.md` for browser live-text unacknowledged-operation
+preservation across WebSocket close/error before acknowledgement.
 
 ## Deployment Version
 
@@ -515,6 +517,10 @@ The same local-buffer preservation applies when the browser receives
 `text_session.state` during join, reconnect, or retry. A clean editor buffer is
 updated to the server session text; a dirty or previously pending local buffer
 is preserved and re-diffed against the authoritative session text.
+If the WebSocket closes or errors before an outstanding local live-text
+operation is acknowledged, the browser keeps an unacknowledged-operation marker
+so the next session state still preserves and re-diffs the visible local
+buffer.
 
 Offline sync accepts a batch of queued client content-save operations:
 

@@ -410,6 +410,14 @@ the authoritative session shadow. Clean buffers still adopt the server session
 text. No canonical JSON storage, snapshots, or append-only events are changed
 until `text_session.commit` succeeds.
 
+TASK_137 live-text unacknowledged-operation preservation also adds no table.
+The static browser UI keeps a transient flag when a local text operation was
+sent but the WebSocket closed, errored, or returned an error before
+acknowledgement. The flag makes the next authoritative session state preserve
+and re-diff the visible local buffer instead of treating the optimistic shadow
+as clean. It is cleared after acknowledgement or resync and never becomes
+canonical document storage.
+
 TASK_104 adds operational auth and sync tables:
 
 - `refresh_tokens`: hashed one-time refresh tokens linked to a session and
