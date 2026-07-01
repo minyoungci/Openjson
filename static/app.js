@@ -1921,15 +1921,25 @@
     } else if (anchorType === "event") {
       payload.event_id = cleanOptional(els.commentEventId.value);
     }
-    await apiFetch(`/documents/${encodeURIComponent(documentId)}/comment-threads`, {
-      method: "POST",
-      body: payload,
-    });
-    if (documentId !== state.selectedDocumentId) {
+    try {
+      await apiFetch(`/documents/${encodeURIComponent(documentId)}/comment-threads`, {
+        method: "POST",
+        body: payload,
+      });
+    } catch (error) {
+      if (!isCurrentCommentAction(documentId)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentCommentAction(documentId)) {
       return;
     }
     els.commentBody.value = "";
     await loadCommentThreads();
+    if (!isCurrentCommentAction(documentId)) {
+      return;
+    }
     setEditorStatus("Note added.", "ok");
     syncButtons();
   }
@@ -1945,14 +1955,24 @@
       renderText(els.commentsPanel, "Reply body is required.", "error-text");
       return;
     }
-    await apiFetch(`/comment-threads/${encodeURIComponent(threadId)}/comments`, {
-      method: "POST",
-      body: { body },
-    });
-    if (documentId !== state.selectedDocumentId) {
+    try {
+      await apiFetch(`/comment-threads/${encodeURIComponent(threadId)}/comments`, {
+        method: "POST",
+        body: { body },
+      });
+    } catch (error) {
+      if (!isCurrentCommentAction(documentId)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentCommentAction(documentId)) {
       return;
     }
     await loadCommentThreads();
+    if (!isCurrentCommentAction(documentId)) {
+      return;
+    }
     setEditorStatus("Reply added.", "ok");
   }
 
@@ -1965,14 +1985,28 @@
       action === "resolve"
         ? `/comment-threads/${encodeURIComponent(threadId)}/resolve`
         : `/comment-threads/${encodeURIComponent(threadId)}/reopen`;
-    await apiFetch(path, {
-      method: "POST",
-    });
-    if (documentId !== state.selectedDocumentId) {
+    try {
+      await apiFetch(path, {
+        method: "POST",
+      });
+    } catch (error) {
+      if (!isCurrentCommentAction(documentId)) {
+        return;
+      }
+      throw error;
+    }
+    if (!isCurrentCommentAction(documentId)) {
       return;
     }
     await loadCommentThreads();
+    if (!isCurrentCommentAction(documentId)) {
+      return;
+    }
     setEditorStatus(action === "resolve" ? "Note resolved." : "Note reopened.", "ok");
+  }
+
+  function isCurrentCommentAction(documentId) {
+    return state.selectedDocumentId === documentId;
   }
 
   async function handleCommentsPanelClick(event) {

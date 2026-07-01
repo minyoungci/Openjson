@@ -233,6 +233,8 @@ See `docs/TASK_164_PLAN.md` for guarding stale browser
 switches, dirty editor changes, or overlapping project document-change refreshes.
 See `docs/TASK_165_PLAN.md` for guarding stale browser collaboration-state
 polling responses and failures after document switches or version changes.
+See `docs/TASK_166_PLAN.md` for guarding stale browser comment action failures
+and success statuses after document switches.
 
 ## Deployment Version
 
@@ -651,7 +653,9 @@ should prefer display names for readability and keep ids only as fallbacks.
 The static browser client applies comment-thread list responses only when the
 response belongs to the latest comment-thread load request for the currently
 selected document. It also ignores stale completed comment actions if the user
-switches documents before the action returns.
+switches documents before the action returns. Comment action failures and
+post-refresh success statuses are also ignored when the selected document no
+longer matches the captured action document.
 
 Document soft-delete and restore mutations send `document.lifecycle` over the
 same document WebSocket channel after the mutation transaction commits. The

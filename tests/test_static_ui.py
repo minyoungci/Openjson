@@ -435,17 +435,31 @@ class StaticUiTests(unittest.TestCase):
         )[0]
         self.assertIn("const documentId = state.selectedDocumentId", comment_creator)
         self.assertIn("/documents/${encodeURIComponent(documentId)}/comment-threads", comment_creator)
-        self.assertIn("if (documentId !== state.selectedDocumentId)", comment_creator)
+        self.assertIn("catch (error)", comment_creator)
+        self.assertIn("if (!isCurrentCommentAction(documentId))", comment_creator)
+        self.assertIn("throw error", comment_creator)
+        self.assertIn("await loadCommentThreads()", comment_creator)
+        self.assertGreaterEqual(comment_creator.count("if (!isCurrentCommentAction(documentId))"), 3)
         comment_reply = js.text.split("async function addCommentReply", 1)[1].split(
             "async function setCommentThreadStatus", 1
         )[0]
         self.assertIn("const documentId = state.selectedDocumentId", comment_reply)
-        self.assertIn("if (documentId !== state.selectedDocumentId)", comment_reply)
+        self.assertIn("catch (error)", comment_reply)
+        self.assertIn("if (!isCurrentCommentAction(documentId))", comment_reply)
+        self.assertIn("throw error", comment_reply)
+        self.assertIn("await loadCommentThreads()", comment_reply)
+        self.assertGreaterEqual(comment_reply.count("if (!isCurrentCommentAction(documentId))"), 3)
         comment_status = js.text.split("async function setCommentThreadStatus", 1)[1].split(
             "async function handleCommentsPanelClick", 1
         )[0]
         self.assertIn("const documentId = state.selectedDocumentId", comment_status)
-        self.assertIn("if (documentId !== state.selectedDocumentId)", comment_status)
+        self.assertIn("catch (error)", comment_status)
+        self.assertIn("if (!isCurrentCommentAction(documentId))", comment_status)
+        self.assertIn("throw error", comment_status)
+        self.assertIn("await loadCommentThreads()", comment_status)
+        self.assertGreaterEqual(comment_status.count("if (!isCurrentCommentAction(documentId))"), 3)
+        self.assertIn("function isCurrentCommentAction(documentId)", js.text)
+        self.assertIn("return state.selectedDocumentId === documentId", js.text)
         self.assertIn("/comment-threads", js.text)
         self.assertIn("/comments", js.text)
         self.assertIn("/resolve", js.text)

@@ -586,6 +586,10 @@ if the selected document changes before completion. This is client-only state
 and does not affect `comment_threads`, append-only `comments`, canonical
 snapshots, append-only `document_events`, schemas, reviews, or WebSocket server
 state.
+TASK_166 stale comment action failure/status guarding also adds no table. The
+static browser client rechecks the selected document before reporting comment
+action failures and after follow-up thread reloads before writing success
+status. This does not alter `comment_threads` or append-only `comments`.
 
 TASK_161 stale document panel response guarding also adds no table. The static
 browser client tracks validation, content preview, conflict preview, history,
